@@ -17,7 +17,7 @@ export default async function SchedulePage({
   const state = await getSchedulePageState(session, searchParams?.patient);
 
   return (
-    <AppShell currentPath="/schedule" session={session}>
+    <AppShell currentPath="/schedule" contextPatientId={state.activePatient?.id} session={session}>
       <PageIntro
         eyebrow="Care Plan Builder"
         title={state.activePatient ? `Schedule plan for ${state.activePatient.name}` : "Choose a patient to build the schedule"}

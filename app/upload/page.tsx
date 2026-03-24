@@ -25,7 +25,7 @@ export default async function UploadPage({
   const state = await getUploadPageState(session, searchParams?.patient);
 
   return (
-    <AppShell currentPath="/upload" session={session}>
+    <AppShell currentPath="/upload" contextPatientId={state.activePatient?.id} session={session}>
       <PageIntro
         eyebrow="Prescription Intake"
         title={state.activePatient ? `Import a prescription for ${state.activePatient.name}` : "Choose a patient to import a prescription"}

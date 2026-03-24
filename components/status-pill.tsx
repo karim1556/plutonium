@@ -23,7 +23,7 @@ export function StatusPill({ value }: StatusPillProps) {
   return (
     <span
       className={cn(
-        "inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]",
+        "inline-flex rounded-full px-3.5 py-1.5 text-xs font-semibold tracking-[0.04em]",
         tones[value] ?? "bg-slate-100 text-slate-700"
       )}
     >

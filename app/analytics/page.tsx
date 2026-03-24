@@ -20,7 +20,7 @@ export default async function AnalyticsPage({
   const state = await getAnalyticsState(session, searchParams?.patient);
 
   return (
-    <AppShell currentPath="/analytics" session={session}>
+    <AppShell currentPath="/analytics" contextPatientId={state.activePatient?.id} session={session}>
       <PageIntro
         eyebrow="Care Insights"
         title={state.activePatient ? `Insights for ${state.activePatient.name}` : "Connect a patient to unlock analytics"}

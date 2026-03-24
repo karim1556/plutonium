@@ -21,7 +21,11 @@ export default async function DevicePage({
   const state = await getDeviceState(session, searchParams?.patient);
 
   return (
-    <AppShell currentPath="/device" session={session}>
+    <AppShell
+      currentPath="/device"
+      contextPatientId={state.role === "caregiver" ? state.activePatient?.id : undefined}
+      session={session}
+    >
       <PageIntro
         eyebrow={state.role === "patient" ? "My Dispenser" : "Device Console"}
         title={

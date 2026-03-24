@@ -14,8 +14,8 @@ export function PatientSwitcher({ patients, activePatientId, basePath }: Patient
   }
 
   return (
-    <div className="rounded-[30px] border border-white/80 bg-white/88 p-4 shadow-[0_18px_60px_rgba(15,23,42,0.06)]">
-      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Active Patient</p>
+    <div className="glass-panel p-4">
+      <p className="text-sm font-semibold text-slate-500">Active patient</p>
       <div className="mt-4 flex flex-wrap gap-3">
         {patients.map((patient) => {
           const active = patient.id === activePatientId;
@@ -28,10 +28,10 @@ export function PatientSwitcher({ patients, activePatientId, basePath }: Patient
                 query: { patient: patient.id }
               }}
               className={cn(
-                "rounded-full px-4 py-2 text-sm font-semibold transition",
+                "rounded-full px-5 py-3 text-sm font-semibold transition",
                 active
-                  ? "bg-slate-900 text-white shadow-[0_10px_24px_rgba(15,23,42,0.18)]"
-                  : "bg-slate-50 text-slate-700 hover:bg-sky-50 hover:text-slate-900"
+                  ? "bg-slate-900 text-white shadow-[0_14px_32px_rgba(15,23,42,0.18)]"
+                  : "bg-[#f5f7f2] text-slate-700 hover:bg-white hover:text-slate-900"
               )}
             >
               {patient.name}

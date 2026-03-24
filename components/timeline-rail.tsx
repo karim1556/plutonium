@@ -20,11 +20,11 @@ export function TimelineRail({ items }: TimelineRailProps) {
       {items.map((item) => (
         <div
           key={`${item.label}-${item.status}`}
-          className="rounded-[26px] border border-white/80 bg-slate-50/90 p-4 shadow-[0_16px_45px_rgba(15,23,42,0.05)]"
+          className="rounded-[28px] border border-[var(--sage-line)] bg-white p-5 shadow-[0_16px_45px_rgba(23,33,37,0.05)]"
         >
           <div className={`h-2 rounded-full ${statusClasses[item.status] ?? "bg-slate-300"}`} />
-          <p className="mt-4 text-sm font-semibold text-slate-900">{item.label}</p>
-          <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-400">{item.status}</p>
+          <p className="mt-4 text-base font-semibold text-slate-900">{item.label}</p>
+          <p className="mt-1 text-sm text-slate-500">{item.status}</p>
         </div>
       ))}
     </div>

@@ -1,89 +1,110 @@
+import type { Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
-  ActivitySquare,
-  CalendarRange,
-  ClipboardPlus,
-  Cpu,
   HeartHandshake,
   LayoutDashboard,
+  LifeBuoy,
   Link2,
-  MessageCircleHeart,
-  ShieldCheck
+  type LucideIcon
 } from "lucide-react";
+import type { UrlObject } from "url";
 import { SessionControl } from "@/components/session-control";
 import { cn } from "@/lib/utils";
 import type { SessionUser } from "@/types/auth";
 
-const navigationByRole = {
+interface NavigationItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  matchPaths?: string[];
+  preservePatientContext?: boolean;
+}
+
+const navigationByRole: Record<SessionUser["role"], NavigationItem[]> = {
   patient: [
-    { href: "/patient", label: "Today", icon: LayoutDashboard },
-    { href: "/connections", label: "Care Circle", icon: Link2 },
-    { href: "/chat", label: "Ask For Help", icon: MessageCircleHeart },
-    { href: "/device", label: "My Device", icon: Cpu }
+    { href: "/patient", label: "Today", icon: LayoutDashboard, matchPaths: ["/patient"] },
+    {
+      href: "/support",
+      label: "Support",
+      icon: LifeBuoy,
+      matchPaths: ["/support", "/chat", "/device"]
+    },
+    { href: "/connections", label: "Care Circle", icon: Link2, matchPaths: ["/connections"] }
   ],
   caregiver: [
-    { href: "/caregiver", label: "Care Overview", icon: HeartHandshake },
-    { href: "/connections", label: "Connections", icon: Link2 },
-    { href: "/upload", label: "Add Prescription", icon: ClipboardPlus },
-    { href: "/schedule", label: "Schedule", icon: CalendarRange },
-    { href: "/analytics", label: "Insights", icon: ActivitySquare },
-    { href: "/device", label: "Device", icon: Cpu },
-    { href: "/chat", label: "Assistant", icon: ShieldCheck }
+    { href: "/caregiver", label: "Care Overview", icon: HeartHandshake, matchPaths: ["/caregiver"] },
+    {
+      href: "/support",
+      label: "Support Center",
+      icon: LifeBuoy,
+      matchPaths: ["/support", "/upload", "/schedule", "/analytics", "/device", "/chat"],
+      preservePatientContext: true
+    },
+    { href: "/connections", label: "Connections", icon: Link2, matchPaths: ["/connections"] }
   ]
 } as const;
 
 interface AppShellProps {
   children: ReactNode;
   currentPath?: string;
+  contextPatientId?: string | null;
   session: SessionUser;
 }
 
-export function AppShell({ children, currentPath, session }: AppShellProps) {
+export function AppShell({ children, currentPath, contextPatientId, session }: AppShellProps) {
   const navigation = navigationByRole[session.role];
+  const roleHeadline =
+    session.role === "patient" ? "One clear medicine step at a time." : "Care decisions with less noise.";
+  const roleDescription =
+    session.role === "patient"
+      ? "The dashboard stays calm. Support and extra tools live in one separate place."
+      : "Keep the overview focused here, then use Support for schedules, analytics, device tools, and assistance.";
+  const roleTip =
+    session.role === "patient"
+      ? "If you feel unsure, open Support before taking more medicine."
+      : "Start with the patient, the next dose, and the highest-risk task.";
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#f7fbff_0%,#eef7f2_100%)] text-slate-900">
-      <div className="mx-auto max-w-[1540px] px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
-        <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="flex flex-col gap-5 rounded-[36px] border border-white/80 bg-white/82 p-5 shadow-[0_24px_70px_rgba(15,23,42,0.08)] backdrop-blur lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)]">
-            <div className="rounded-[28px] bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_100%)] p-5 text-white">
-              <p className="text-xs font-semibold uppercase tracking-[0.32em] text-white/70">MedAssist Pro</p>
-              <h1 className="mt-3 font-serif text-3xl leading-tight">
-                {session.role === "patient" ? "Your medicines, made simpler." : "Caregiving, without the guesswork."}
-              </h1>
-              <p className="mt-3 text-sm leading-6 text-white/78">
-                {session.role === "patient"
-                  ? "Clear steps, larger actions, and gentle support when it is time to take a dose."
-                  : "See risk early, support remotely, and keep your loved one on track."}
-              </p>
+    <div className="min-h-screen text-slate-900">
+      <div className="mx-auto max-w-[1540px] px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+        <div className="grid gap-6 xl:grid-cols-[290px_minmax(0,1fr)]">
+          <aside className="glass-panel flex flex-col gap-5 p-5 xl:sticky xl:top-6 xl:h-[calc(100vh-3rem)]">
+            <div className="overflow-hidden rounded-[30px] bg-[linear-gradient(155deg,#173d35_0%,#2b6a5e_56%,#f1d7b0_100%)] p-5 text-white">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/72">MedAssist Pro</p>
+              <h1 className="mt-3 font-serif text-[2rem] leading-tight">{roleHeadline}</h1>
+              <p className="mt-3 max-w-xs text-sm leading-6 text-white/80">{roleDescription}</p>
             </div>
 
-            <div className="rounded-[28px] bg-sky-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.25em] text-sky-800/70">Signed in as</p>
+            <div className="rounded-[28px] border border-[var(--sage-line)] bg-[#f8fbf8] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Signed in as</p>
               <p className="mt-2 text-lg font-semibold text-slate-900">{session.name}</p>
               <p className="mt-1 text-sm text-slate-600">{session.relationLabel ?? session.role}</p>
             </div>
 
             <nav className="grid gap-2">
-              {navigation.map(({ href, label, icon: Icon }) => {
-                const active = currentPath === href;
+              {navigation.map(({ href, label, icon: Icon, matchPaths, preservePatientContext }) => {
+                const active = Boolean(currentPath && (currentPath === href || matchPaths?.includes(currentPath)));
+                const navHref =
+                  preservePatientContext && session.role === "caregiver" && contextPatientId
+                    ? { pathname: href, query: { patient: contextPatientId } }
+                    : href;
 
                 return (
                   <Link
                     key={href}
-                    href={href}
+                    href={navHref as Route | UrlObject}
                     className={cn(
-                      "group inline-flex items-center gap-3 rounded-[22px] px-4 py-3 text-sm font-semibold transition",
+                      "group inline-flex items-center gap-3 rounded-[24px] px-4 py-3.5 text-sm font-semibold transition",
                       active
-                        ? "bg-slate-900 text-white shadow-[0_16px_40px_rgba(15,23,42,0.18)]"
-                        : "bg-slate-50 text-slate-700 hover:bg-sky-50 hover:text-slate-900"
+                        ? "bg-slate-900 text-white shadow-[0_18px_46px_rgba(15,23,42,0.18)]"
+                        : "bg-[#f5f7f2] text-slate-700 hover:bg-white hover:text-slate-950"
                     )}
                   >
                     <span
                       className={cn(
-                        "rounded-2xl p-2 transition",
-                        active ? "bg-white/10 text-white" : "bg-white text-slate-500 group-hover:text-sky-700"
+                        "rounded-2xl p-2.5 transition",
+                        active ? "bg-white/10 text-white" : "bg-white text-slate-500 group-hover:text-slate-900"
                       )}
                     >
                       <Icon className="h-4 w-4" />
@@ -95,21 +116,15 @@ export function AppShell({ children, currentPath, session }: AppShellProps) {
             </nav>
 
             <div className="mt-auto space-y-4">
-              <div className="rounded-[28px] border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-900">
-                  {session.role === "patient" ? "Small reminder" : "Care note"}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {session.role === "patient"
-                    ? "If anything feels confusing, use the assistant before skipping or doubling a dose."
-                    : "Start with refill risk, device readiness, and evening adherence. Those are usually the fastest interventions."}
-                </p>
+              <div className="rounded-[28px] border border-[var(--sage-line)] bg-[#fbfcf9] p-4">
+                <p className="text-sm font-semibold text-slate-900">Keep it simple</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{roleTip}</p>
               </div>
               <SessionControl session={session} />
             </div>
           </aside>
 
-          <main className="space-y-6">{children}</main>
+          <main className="space-y-8">{children}</main>
         </div>
       </div>
     </div>

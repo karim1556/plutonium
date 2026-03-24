@@ -8,27 +8,42 @@ interface PageIntroProps {
 export function PageIntro({ eyebrow, title, description, accent = "neutral" }: PageIntroProps) {
   const accentClasses =
     accent === "patient"
-      ? "from-sky-100 via-white to-emerald-50"
+      ? {
+          shell: "from-[#eef8ff] via-white to-[#f2fbf5]",
+          glow: "from-sky-200/70 via-emerald-100/30 to-transparent",
+          dot: "bg-sky-500",
+          note: "Large actions, calmer guidance."
+        }
       : accent === "caregiver"
-        ? "from-amber-50 via-white to-rose-50"
-        : "from-white via-sky-50 to-emerald-50";
+        ? {
+            shell: "from-[#fff6ea] via-white to-[#fff1ef]",
+            glow: "from-amber-200/70 via-rose-100/30 to-transparent",
+            dot: "bg-amber-500",
+            note: "Watch the highest-risk item first."
+          }
+        : {
+            shell: "from-white via-[#f4f9f6] to-[#eef7ff]",
+            glow: "from-emerald-100/60 via-sky-100/30 to-transparent",
+            dot: "bg-emerald-500",
+            note: "Start with what matters now."
+          };
 
   return (
-    <div
-      className={`grid gap-4 rounded-[36px] border border-white/80 bg-gradient-to-br ${accentClasses} p-6 shadow-[0_24px_70px_rgba(15,23,42,0.06)] lg:grid-cols-[minmax(0,1fr)_280px] lg:items-end`}
+    <section
+      className={`glass-panel relative overflow-hidden bg-gradient-to-br ${accentClasses.shell} p-6 sm:p-7 lg:p-8`}
     >
-      <div className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">{eyebrow}</p>
-        <h2 className="font-serif text-4xl leading-tight text-slate-950 sm:text-5xl">{title}</h2>
-        <p className="max-w-3xl text-sm leading-7 text-slate-600 sm:text-base">{description}</p>
+      <div className={`absolute inset-y-0 right-0 hidden w-[34%] bg-gradient-to-l ${accentClasses.glow} lg:block`} />
+      <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-3xl space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-500">{eyebrow}</p>
+          <h2 className="font-serif text-4xl leading-tight text-slate-950 sm:text-5xl">{title}</h2>
+          <p className="max-w-2xl text-base leading-8 text-slate-600">{description}</p>
+        </div>
+        <div className="inline-flex items-center gap-3 rounded-full border border-white/90 bg-white/88 px-4 py-3 text-sm font-medium text-slate-700 shadow-sm">
+          <span className={`h-2.5 w-2.5 rounded-full ${accentClasses.dot}`} />
+          {accentClasses.note}
+        </div>
       </div>
-      <div className="rounded-[30px] border border-white/80 bg-white/88 p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Focus</p>
-        <p className="mt-3 text-sm leading-6 text-slate-600">
-          Clean guidance first, operational detail second. That keeps the patient experience calm and the
-          caregiver experience actionable.
-        </p>
-      </div>
-    </div>
+    </section>
   );
 }

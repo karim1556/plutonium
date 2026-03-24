@@ -9,13 +9,13 @@ interface SectionCardProps {
 
 export function SectionCard({ eyebrow, title, description, children }: SectionCardProps) {
   return (
-    <section className="rounded-[34px] border border-white/80 bg-white/88 p-6 shadow-[0_24px_70px_rgba(15,23,42,0.07)] backdrop-blur">
-      <div className="mb-5 space-y-2">
+    <section className="glass-panel p-6 sm:p-7">
+      <div className="mb-6 space-y-2">
         {eyebrow ? (
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">{eyebrow}</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{eyebrow}</p>
         ) : null}
-        <h2 className="font-serif text-2xl text-slate-950 sm:text-3xl">{title}</h2>
-        {description ? <p className="max-w-3xl text-sm leading-6 text-slate-600">{description}</p> : null}
+        <h2 className="font-serif text-[2rem] leading-tight text-slate-950">{title}</h2>
+        {description ? <p className="max-w-3xl text-base leading-7 text-slate-600">{description}</p> : null}
       </div>
       {children}
     </section>

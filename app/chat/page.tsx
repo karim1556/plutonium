@@ -17,7 +17,11 @@ export default async function ChatPage({
   const state = await getChatState(session, searchParams?.patient);
 
   return (
-    <AppShell currentPath="/chat" session={session}>
+    <AppShell
+      currentPath="/chat"
+      contextPatientId={session.role === "caregiver" ? state.activePatient?.id : undefined}
+      session={session}
+    >
       <PageIntro
         eyebrow={session.role === "patient" ? "Guided Support" : "Care Assistant"}
         title={
