@@ -131,6 +131,7 @@ inline void initializeFingerprint() {
 
 inline bool authorizeFingerprint() {
   if (!deviceState.requiresFingerprint) {
+    renderDisplay("Access Granted", "Fingerprint off", "Bench/test mode", "");
     return true;
   }
 
@@ -140,7 +141,7 @@ inline bool authorizeFingerprint() {
     return false;
   }
 
-  renderDisplay("Scan fingerprint", "Slot " + String(deviceState.currentSlot), "", "Timeout 10 sec");
+  renderDisplay("Scan Finger", "Slot " + String(deviceState.currentSlot), "", "Timeout 10 sec");
   unsigned long startedAt = millis();
 
   while (millis() - startedAt < FINGERPRINT_TIMEOUT_MS) {
@@ -155,11 +156,14 @@ inline bool authorizeFingerprint() {
 
     if (finger.fingerFastSearch() == FINGERPRINT_OK) {
       deviceState.lastStatus = "Fingerprint ok";
+      renderDisplay("Access Granted", "Fingerprint OK", "Preparing dose", "");
+      delay(900);
       return true;
     }
   }
 
   deviceState.lastStatus = "Fingerprint fail";
+  renderDisplay("Access Denied", "Fingerprint Fail", "Dose blocked", "");
   return false;
 }
 

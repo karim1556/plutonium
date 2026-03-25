@@ -140,7 +140,7 @@ inline bool dispenseFlow(int slot) {
 
   deviceState.isDispensing = true;
   pulseBuzzer(2, 120);
-  renderDisplay("Dose requested", "Preparing slot " + String(slot), "", "");
+  renderDisplay("Dose Requested", "Preparing slot " + String(slot), "", "");
 
   if (!authorizeFingerprint()) {
     setErrorLights();
@@ -153,11 +153,11 @@ inline bool dispenseFlow(int slot) {
     return false;
   }
 
-  renderDisplay("Rotating wheel", "Slot " + String(slot), "", "");
+  renderDisplay("Dispensing", "Rotating wheel", "Slot " + String(slot), "");
   rotateToSlot(slot);
   closeDoor();
 
-  renderDisplay("Opening door", "Watch chute IR", "", "");
+  renderDisplay("Dispensing", "Opening gate", "Watch chute IR", "");
   openDoor();
   const bool chuteSeen = waitForChuteTrigger(CHUTE_TIMEOUT_MS);
   closeDoor();
@@ -167,7 +167,7 @@ inline bool dispenseFlow(int slot) {
     pulseBuzzer(3, 200);
     sendDeviceEvent("missed", slot, "Door cycled but chute sensor did not trigger.");
     finishDispenseCycle();
-    renderDisplay("No pill detect", "Check slot path", "", "");
+    renderDisplay("Dispensing Fail", "No pill detected", "Check slot path", "");
     delay(1500);
     setIdleLights();
     return false;
@@ -175,7 +175,7 @@ inline bool dispenseFlow(int slot) {
 
   sendDeviceEvent("dispensed", slot, "Door cycled and chute sensor triggered.");
   pulseBuzzer(2, 100);
-  renderDisplay("Take medicine", "Slot " + String(slot), "Waiting hand IR", "");
+  renderDisplay("Dispensing", "Pills Released", "Waiting pickup", "");
 
   if (waitForPickup(PICKUP_TIMEOUT_MS)) {
     finishDispenseCycle();
@@ -187,7 +187,7 @@ inline bool dispenseFlow(int slot) {
   pulseBuzzer(5, 180);
   sendDeviceEvent("missed", slot, "Dispensed but hand sensor did not confirm pickup.");
   finishDispenseCycle();
-  renderDisplay("Pickup timeout", "Dose not taken", "", "");
+  renderDisplay("Pickup Timeout", "Dose not taken", "", "");
   delay(1500);
   setIdleLights();
   return false;
