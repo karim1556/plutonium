@@ -1,14 +1,25 @@
 #pragma once
 
 #include <Arduino.h>
+#include "Config.h"
 
 struct DeviceState {
   int currentSlot = 1;
-  bool requiresFingerprint = true;
+  bool requiresFingerprint = REQUIRE_FINGERPRINT;
   bool isDispensing = false;
-  long baselineWeight = 0;
+  bool wifiConnected = false;
+  bool rtcReady = false;
+  bool lcdReady = false;
+  bool fingerprintReady = false;
+  bool wheelAttached = false;
+  bool doorAttached = false;
+  bool doorOpen = false;
   unsigned long lastHeartbeatAt = 0;
+  unsigned long lastDisplayRefreshAt = 0;
+  unsigned long switchPressedAt = 0;
+  bool longPressHandled = false;
   String activeScheduleIds = "[]";
+  String lastStatus = "Booting";
 };
 
 extern DeviceState deviceState;

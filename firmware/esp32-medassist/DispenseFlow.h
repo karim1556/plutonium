@@ -8,21 +8,77 @@
 #include "Sensors.h"
 #include "State.h"
 
+inline void attachServosIfEnabled() {
+  if (!SERVO_OUTPUT_ENABLED) {
+    return;
+  }
+
+  if (!deviceState.wheelAttached) {
+    wheelServo.setPeriodHertz(50);
+    wheelServo.attach(WHEEL_SERVO_PIN, 500, 2400);
+    deviceState.wheelAttached = true;
+  }
+
+  if (!deviceState.doorAttached) {
+    doorServo.setPeriodHertz(50);
+    doorServo.attach(DOOR_SERVO_PIN, 500, 2400);
+    deviceState.doorAttached = true;
+  }
+}
+
+inline void moveWheelToAngle(int angle) {
+  attachServosIfEnabled();
+
+  if (!deviceState.wheelAttached) {
+    return;
+  }
+
+  wheelServo.write(constrain(angle, WHEEL_SERVO_MIN_ANGLE, WHEEL_SERVO_MAX_ANGLE));
+  delay(WHEEL_SETTLE_MS);
+}
+
+inline void moveDoorToAngle(int angle) {
+  attachServosIfEnabled();
+
+  if (!deviceState.doorAttached) {
+    return;
+  }
+
+  doorServo.write(constrain(angle, DOOR_SERVO_MIN_ANGLE, DOOR_SERVO_MAX_ANGLE));
+  delay(DOOR_TRAVEL_MS);
+}
+
 inline void rotateToSlot(int slot) {
   if (slot < 1 || slot > SLOT_COUNT) {
     return;
   }
 
-  wheelServo.write(SLOT_ANGLES[slot - 1]);
   deviceState.currentSlot = slot;
-  delay(1200);
+  moveWheelToAngle(SLOT_ANGLES[slot - 1]);
 }
 
-inline void pulseActuatorForSlot(int slot, int offset) {
-  wheelServo.write(SLOT_ANGLES[slot - 1] + offset);
-  delay(700);
-  wheelServo.write(SLOT_ANGLES[slot - 1]);
-  delay(500);
+inline void closeDoor() {
+  moveDoorToAngle(DOOR_CLOSED_ANGLE);
+  deviceState.doorOpen = false;
+}
+
+inline void openDoor() {
+  moveDoorToAngle(DOOR_OPEN_ANGLE);
+  deviceState.doorOpen = true;
+}
+
+inline bool waitForChuteTrigger(unsigned long timeoutMs) {
+  unsigned long startedAt = millis();
+
+  while (millis() - startedAt < timeoutMs) {
+    if (chuteSensorTriggered()) {
+      return true;
+    }
+
+    delay(60);
+  }
+
+  return false;
 }
 
 inline bool waitForPickup(unsigned long timeoutMs) {
@@ -30,57 +86,108 @@ inline bool waitForPickup(unsigned long timeoutMs) {
 
   while (millis() - startedAt < timeoutMs) {
     if (pickupConfirmed()) {
-      digitalWrite(GREEN_LED_PIN, HIGH);
-      sendDeviceEvent("pickup_confirmed", deviceState.currentSlot, "IR + load cell confirmed pickup.");
+      setSuccessLights();
+      sendDeviceEvent("pickup_confirmed", deviceState.currentSlot, "Hand sensor confirmed pickup.");
+      renderDisplay("Pickup confirmed", "Slot " + String(deviceState.currentSlot), "Dose completed", "");
       delay(1200);
       setIdleLights();
       return true;
     }
-    delay(250);
+
+    delay(80);
   }
 
   return false;
 }
 
+inline bool moveWheelForCalibration(int angle) {
+  if (!SERVO_OUTPUT_ENABLED) {
+    return false;
+  }
+
+  moveWheelToAngle(angle);
+  renderDisplay("Wheel calibrate", "Angle " + String(angle), "", "");
+  return true;
+}
+
+inline bool moveDoorForCalibration(int angle) {
+  if (!SERVO_OUTPUT_ENABLED) {
+    return false;
+  }
+
+  moveDoorToAngle(angle);
+  renderDisplay("Door calibrate", "Angle " + String(angle), "", "");
+  return true;
+}
+
+inline void finishDispenseCycle() {
+  closeDoor();
+  deviceState.isDispensing = false;
+  deviceState.activeScheduleIds = "[]";
+}
+
 inline bool dispenseFlow(int slot) {
+  if (slot < 1 || slot > SLOT_COUNT) {
+    deviceState.lastStatus = "Bad slot";
+    return false;
+  }
+
+  if (!SERVO_OUTPUT_ENABLED) {
+    deviceState.lastStatus = "Servo disabled";
+    renderDisplay("Bench mode only", "Servo motion off", "", "Edit Config.h");
+    return false;
+  }
+
   deviceState.isDispensing = true;
-  pulseBuzzer(2, 160);
+  pulseBuzzer(2, 120);
+  renderDisplay("Dose requested", "Preparing slot " + String(slot), "", "");
 
   if (!authorizeFingerprint()) {
-    digitalWrite(RED_LED_PIN, HIGH);
-    pulseBuzzer(4, 220);
+    setErrorLights();
+    pulseBuzzer(4, 180);
     sendDeviceEvent("unauthorized", slot, "Fingerprint authorization failed.");
     deviceState.isDispensing = false;
+    renderDisplay("Access denied", "Fingerprint fail", "", "");
     delay(1200);
     setIdleLights();
     return false;
   }
 
+  renderDisplay("Rotating wheel", "Slot " + String(slot), "", "");
   rotateToSlot(slot);
-  pulseActuatorForSlot(slot, 10);
-  sendDeviceEvent("dispensed", slot, "Primary dispense action completed.");
-  pulseBuzzer(3, 140);
+  closeDoor();
+
+  renderDisplay("Opening door", "Watch chute IR", "", "");
+  openDoor();
+  const bool chuteSeen = waitForChuteTrigger(CHUTE_TIMEOUT_MS);
+  closeDoor();
+
+  if (!chuteSeen) {
+    setErrorLights();
+    pulseBuzzer(3, 200);
+    sendDeviceEvent("missed", slot, "Door cycled but chute sensor did not trigger.");
+    finishDispenseCycle();
+    renderDisplay("No pill detect", "Check slot path", "", "");
+    delay(1500);
+    setIdleLights();
+    return false;
+  }
+
+  sendDeviceEvent("dispensed", slot, "Door cycled and chute sensor triggered.");
+  pulseBuzzer(2, 100);
+  renderDisplay("Take medicine", "Slot " + String(slot), "Waiting hand IR", "");
 
   if (waitForPickup(PICKUP_TIMEOUT_MS)) {
-    deviceState.isDispensing = false;
-    deviceState.activeScheduleIds = "[]";
+    finishDispenseCycle();
+    deviceState.lastStatus = "Dispense ok";
     return true;
   }
 
-  sendDeviceEvent("stuck_retry", slot, "Pickup not confirmed. Running retry pulse.");
-  pulseActuatorForSlot(slot, 12);
-
-  if (waitForPickup(RETRY_TIMEOUT_MS)) {
-    deviceState.isDispensing = false;
-    deviceState.activeScheduleIds = "[]";
-    return true;
-  }
-
-  digitalWrite(RED_LED_PIN, HIGH);
-  pulseBuzzer(5, 200);
-  sendDeviceEvent("missed", slot, "No pickup confirmation after retry.");
-  deviceState.isDispensing = false;
-  deviceState.activeScheduleIds = "[]";
+  setErrorLights();
+  pulseBuzzer(5, 180);
+  sendDeviceEvent("missed", slot, "Dispensed but hand sensor did not confirm pickup.");
+  finishDispenseCycle();
+  renderDisplay("Pickup timeout", "Dose not taken", "", "");
   delay(1500);
   setIdleLights();
   return false;

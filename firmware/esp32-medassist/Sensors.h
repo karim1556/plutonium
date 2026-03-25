@@ -2,29 +2,131 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <Wire.h>
 #include "Config.h"
 #include "HardwareContext.h"
 #include "Indicators.h"
 #include "Pins.h"
 #include "State.h"
 
+inline String fitToLcd(const String& input) {
+  String line = input;
+
+  while (line.length() < LCD_COLUMNS) {
+    line += ' ';
+  }
+
+  return line.substring(0, LCD_COLUMNS);
+}
+
+inline void printDisplayLine(uint8_t row, const String& text) {
+  if (!deviceState.lcdReady || row >= LCD_ROWS) {
+    return;
+  }
+
+  lcd.setCursor(0, row);
+  lcd.print(fitToLcd(text));
+}
+
+inline void renderDisplay(
+  const String& line1,
+  const String& line2 = "",
+  const String& line3 = "",
+  const String& line4 = ""
+) {
+  if (!deviceState.lcdReady) {
+    return;
+  }
+
+  printDisplayLine(0, line1);
+  printDisplayLine(1, line2);
+  printDisplayLine(2, line3);
+  printDisplayLine(3, line4);
+}
+
+inline bool signalIsActive(int pin) {
+  return digitalRead(pin) == SENSOR_ACTIVE_STATE;
+}
+
+inline bool chuteSensorTriggered() {
+  return signalIsActive(IR_CHUTE_SENSOR_PIN);
+}
+
+inline bool handSensorTriggered() {
+  return signalIsActive(IR_HAND_SENSOR_PIN);
+}
+
+inline bool manualSwitchPressed() {
+  return digitalRead(MANUAL_SWITCH_PIN) == SWITCH_ACTIVE_STATE;
+}
+
+inline String timeLabel() {
+  if (!deviceState.rtcReady) {
+    return "--:--";
+  }
+
+  const DateTime now = rtc.now();
+  char buffer[6];
+  snprintf(buffer, sizeof(buffer), "%02d:%02d", now.hour(), now.minute());
+  return String(buffer);
+}
+
+inline void refreshIdleDisplay() {
+  if (deviceState.isDispensing) {
+    return;
+  }
+
+  const String line1 = "Time " + timeLabel();
+  const String line2 = "Slot " + String(deviceState.currentSlot) + (SERVO_OUTPUT_ENABLED ? " Armed" : " Bench");
+  const String line3 = String(deviceState.wifiConnected ? "WiFi" : "NoWiFi") + " " +
+    String(deviceState.fingerprintReady ? "FP" : "NoFP");
+  const String line4 = "C" + String(chuteSensorTriggered() ? 1 : 0) +
+    " H" + String(handSensorTriggered() ? 1 : 0) +
+    " S" + String(manualSwitchPressed() ? 1 : 0);
+
+  renderDisplay(line1, line2, line3, line4);
+}
+
 inline void connectWiFi() {
+  if (String(WIFI_SSID).length() == 0 || String(WIFI_PASSWORD).length() == 0) {
+    deviceState.wifiConnected = false;
+    return;
+  }
+
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  unsigned long startedAt = millis();
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+  while (WiFi.status() != WL_CONNECTED && millis() - startedAt < WIFI_CONNECT_TIMEOUT_MS) {
+    delay(250);
+  }
+
+  deviceState.wifiConnected = WiFi.status() == WL_CONNECTED;
+}
+
+inline void initializeI2cBus() {
+  Wire.begin(LCD_SDA_PIN, LCD_SCL_PIN);
+}
+
+inline void initializeDisplay() {
+  lcd.init();
+  lcd.backlight();
+  deviceState.lcdReady = true;
+  renderDisplay("MedAssist Pro", "Booting logic", "Bench-safe mode", "Servo off by cfg");
+}
+
+inline void initializeRtc() {
+  deviceState.rtcReady = rtc.begin();
+
+  if (deviceState.rtcReady && rtc.lostPower() && AUTO_SET_RTC_FROM_BUILD_TIME) {
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }
 }
 
-inline void initializeScale() {
-  scale.begin(HX711_DOUT_PIN, HX711_SCK_PIN);
-
-  if (scale.is_ready()) {
-    scale.set_scale();
-    scale.tare();
-    deviceState.baselineWeight = scale.get_units(5);
-  }
+inline void initializeFingerprint() {
+  FingerSerial.begin(57600, SERIAL_8N1, FINGERPRINT_RX_PIN, FINGERPRINT_TX_PIN);
+  finger.begin(57600);
+  deviceState.fingerprintReady = finger.verifyPassword();
 }
 
 inline bool authorizeFingerprint() {
@@ -32,6 +134,13 @@ inline bool authorizeFingerprint() {
     return true;
   }
 
+  if (!deviceState.fingerprintReady) {
+    deviceState.lastStatus = "Fingerprint offline";
+    renderDisplay("Fingerprint err", "Module offline", "", "Check wiring");
+    return false;
+  }
+
+  renderDisplay("Scan fingerprint", "Slot " + String(deviceState.currentSlot), "", "Timeout 10 sec");
   unsigned long startedAt = millis();
 
   while (millis() - startedAt < FINGERPRINT_TIMEOUT_MS) {
@@ -45,17 +154,15 @@ inline bool authorizeFingerprint() {
     }
 
     if (finger.fingerFastSearch() == FINGERPRINT_OK) {
+      deviceState.lastStatus = "Fingerprint ok";
       return true;
     }
   }
 
+  deviceState.lastStatus = "Fingerprint fail";
   return false;
 }
 
 inline bool pickupConfirmed() {
-  bool irTriggered = digitalRead(IR_SENSOR_PIN) == HIGH;
-  long currentWeight = scale.is_ready() ? scale.get_units(3) : deviceState.baselineWeight;
-  bool weightReduced = currentWeight < deviceState.baselineWeight - 2;
-
-  return irTriggered && weightReduced;
+  return handSensorTriggered();
 }
