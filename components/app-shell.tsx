@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   Link2,
+  Stethoscope,
   type LucideIcon
 } from "lucide-react";
 import type { UrlObject } from "url";
@@ -34,6 +35,7 @@ const navigationByRole: Record<SessionUser["role"], NavigationItem[]> = {
   ],
   caregiver: [
     { href: "/caregiver", label: "Care Overview", icon: HeartHandshake, matchPaths: ["/caregiver"] },
+    { href: "/doctor", label: "Doctor Portal", icon: Stethoscope, matchPaths: ["/doctor"] },
     {
       href: "/support",
       label: "Support Center",

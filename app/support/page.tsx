@@ -413,7 +413,7 @@ export default async function SupportPage({
               description="Low stock and repeat-risk issues stay visible here without cluttering the home screen."
             >
               <div className="space-y-4">
-                {state.risks.map((risk) => (
+                {state.risks.flags.map((risk) => (
                   <article key={risk.id} className="rounded-[28px] border border-[var(--sage-line)] bg-[#fbfcfa] p-4">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold text-slate-900">{risk.title}</p>
@@ -430,7 +430,7 @@ export default async function SupportPage({
                     </p>
                   </article>
                 ))}
-                {!state.risks.length && !state.refillItems.length ? (
+                {!state.risks.flags.length && !state.refillItems.length ? (
                   <article className="rounded-[28px] border border-[var(--sage-line)] bg-[#fbfcfa] p-4 text-sm leading-6 text-slate-600">
                     No active safety or refill issues are visible right now.
                   </article>

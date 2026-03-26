@@ -23,6 +23,10 @@ function guessPartsOfDay(frequency: number) {
   return ["morning", "afternoon", "evening", "night"] as const;
 }
 
+const MEAL_WORDS = new Set(["before", "after", "with", "food", "meal", "meals"]);
+const TIMING_WORDS = new Set(["morning", "afternoon", "evening", "night", "sos", "prn"]);
+const DURATION_WORDS = new Set(["day", "days", "week", "weeks", "month", "months"]);
+
 export function parsePrescriptionText(rawText: string) {
   const cleaned = rawText
     .split("\n")
@@ -31,7 +35,7 @@ export function parsePrescriptionText(rawText: string) {
 
   const medications: ParsedPrescriptionMedication[] = cleaned.map((line) => {
     const durationMatch = line.match(/(\d+)\s*(day|days|week|weeks)/i);
-    const dosageMatch = line.match(/(\d+\s?(mg|ml|iu|mcg))/i);
+    const dosageMatch = line.match(/(\d+\s?(mg|ml|iu|mcg|g|tablet|cap|capsule))/i);
     const tokens = line.split(/\s+/);
     const frequencyToken = tokens.find((token) => ABBREVIATIONS[token.toLowerCase()] || /^\d+x$/i.test(token));
     const frequency = frequencyToken
@@ -40,11 +44,27 @@ export function parsePrescriptionText(rawText: string) {
     const durationValue = durationMatch
       ? Number(durationMatch[1]) * (durationMatch[2].toLowerCase().startsWith("week") ? 7 : 1)
       : 30;
-    const name =
-      tokens
-        .filter((token) => !token.match(/^\d/) && !ABBREVIATIONS[token.toLowerCase()])
-        .slice(0, 2)
-        .join(" ") || "Unknown medicine";
+
+    // Extract medicine name - filter out numbers, abbreviations, meal words, and timing words
+    const nameTokens = tokens.filter((token) => {
+      const lower = token.toLowerCase();
+      return (
+        !token.match(/^\d/) && // Not a number
+        !ABBREVIATIONS[lower] && // Not a frequency abbreviation
+        !MEAL_WORDS.has(lower) && // Not a meal-related word
+        !TIMING_WORDS.has(lower) && // Not a timing word
+        !DURATION_WORDS.has(lower) && // Not a duration word
+        !lower.includes("mg") && // Not dosage units
+        !lower.includes("ml") &&
+        !lower.includes("iu") &&
+        !lower.includes("mcg") &&
+        !lower.includes("g") &&
+        !lower.includes("tablet") &&
+        !lower.includes("cap")
+      );
+    });
+
+    const name = nameTokens.slice(0, 2).join(" ") || "Unknown medicine";
     const lower = line.toLowerCase();
 
     return {

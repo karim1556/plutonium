@@ -53,7 +53,7 @@ export default async function AnalyticsPage({
             />
             <StatCard
               label="Risk Flags"
-              value={String(state.risks.length)}
+              value={String(state.risks.flags.length)}
               hint="Combines schedule, stock, and miss-pattern logic."
               icon={<AlertTriangle className="h-5 w-5" />}
             />
@@ -111,7 +111,7 @@ export default async function AnalyticsPage({
               description="Duplicate detection, interaction warnings, repeat misses, and refill shortage are surfaced here."
             >
               <div className="space-y-4">
-                {state.risks.map((risk) => (
+                {state.risks.flags.map((risk) => (
                   <article key={risk.id} className="rounded-[28px] bg-slate-50 p-4">
                     <div className="flex items-center justify-between gap-4">
                       <p className="text-sm font-semibold text-ink">{risk.title}</p>
