@@ -2,11 +2,11 @@
 
 #include <Arduino.h>
 
-const char* WIFI_SSID = "YOUR_WIFI_NAME";
-const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-const char* BACKEND_EVENT_URL = "http://192.168.1.10:3000/api/device/event";
+const char* WIFI_SSID = "SNEHA";
+const char* WIFI_PASSWORD = "2005sneha";
+const char* BACKEND_EVENT_URL = "http://192.168.0.108:3000/api/device/event";
 const char* DEVICE_ID = "device-prod-1";
-const char* DEVICE_SHARED_KEY = "set-this-in-firmware";
+const char* DEVICE_SHARED_KEY = "e6fc750b9dd41f2a6b956bc2e7baaa80a2c970ed856bb273";
 
 // Keep servo motion disabled for first bring-up. Turn this on only after:
 // 1. the wheel angles are calibrated
