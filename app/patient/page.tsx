@@ -1,10 +1,13 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { CheckCircle2, Clock3, LifeBuoy, ShieldAlert } from "lucide-react";
+import { CheckCircle2, Clock3, LifeBuoy, ShieldAlert, MessageCircle } from "lucide-react";
 import { ActionLinkCard } from "@/components/action-link-card";
 import { AppShell } from "@/components/app-shell";
 import { DispenseButton } from "@/components/dispense-button";
+import { LanguageSelector } from "@/components/language-selector";
 import { PageIntro } from "@/components/page-intro";
+import { PredictionsWidget } from "@/components/predictions-widget";
+import { QuickActions } from "@/components/quick-actions";
 import { SectionCard } from "@/components/section-card";
 import { StatCard } from "@/components/stat-card";
 import { StatusPill } from "@/components/status-pill";
@@ -207,6 +210,14 @@ export default async function PatientPage() {
         >
           <div className="space-y-4">
             <ActionLinkCard
+              href="/chat"
+              title="Chat with MedAssist"
+              description="Ask questions about your doses using text or voice. Get instant answers about your medication plan."
+              icon={MessageCircle}
+              cta="Open Chat"
+              tone="sky"
+            />
+            <ActionLinkCard
               href="/support"
               title="Open Support Center"
               description="Ask questions, check the full plan, review reminders, and reach the right tool without crowding the dashboard."
@@ -232,6 +243,34 @@ export default async function PatientPage() {
             </div>
           </div>
         </SectionCard>
+      </div>
+
+      {/* AI Predictions & Quick Actions Row */}
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <SectionCard
+          eyebrow="AI Insights"
+          title="Your adherence predictions"
+          description="Machine learning analyzes your medication patterns to provide personalized insights."
+        >
+          <PredictionsWidget patientId={state.patient?.id} variant="detailed" />
+        </SectionCard>
+
+        <div className="space-y-4">
+          <SectionCard
+            eyebrow="Settings"
+            title="Preferences"
+            description="Customize your experience"
+          >
+            <div className="space-y-4">
+              <LanguageSelector variant="full" />
+              <QuickActions
+                patientId={state.patient?.id}
+                showNotifications={true}
+                showExport={true}
+              />
+            </div>
+          </SectionCard>
+        </div>
       </div>
     </AppShell>
   );

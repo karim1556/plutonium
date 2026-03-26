@@ -1,9 +1,12 @@
 import Link from "next/link";
-import { AlertTriangle, ClipboardList, LifeBuoy } from "lucide-react";
+import { AlertTriangle, ClipboardList, LifeBuoy, MessageCircle } from "lucide-react";
 import { ActionLinkCard } from "@/components/action-link-card";
 import { AppShell } from "@/components/app-shell";
+import { LanguageSelector } from "@/components/language-selector";
 import { PageIntro } from "@/components/page-intro";
 import { PatientSwitcher } from "@/components/patient-switcher";
+import { PredictionsWidget } from "@/components/predictions-widget";
+import { QuickActions } from "@/components/quick-actions";
 import { SectionCard } from "@/components/section-card";
 import { StatusPill } from "@/components/status-pill";
 import { requireSession } from "@/lib/auth";
@@ -182,6 +185,14 @@ export default async function CaregiverPage({
             >
               <div className="space-y-4">
                 <ActionLinkCard
+                  href={{ pathname: "/chat", query: patientQuery }}
+                  title="Chat with MedAssist"
+                  description="Ask questions about patient adherence, risks, and get AI-powered insights using text or voice."
+                  icon={MessageCircle}
+                  cta="Open Chat"
+                  tone="sky"
+                />
+                <ActionLinkCard
                   href={{ pathname: "/support", query: patientQuery }}
                   title="Support Center"
                   description="Use this to reach the full medication board, scheduling, device tools, analytics, and the assistant."
@@ -210,6 +221,34 @@ export default async function CaregiverPage({
                 ) : null}
               </div>
             </SectionCard>
+          </div>
+
+          {/* AI Predictions & Settings Row */}
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <SectionCard
+              eyebrow="AI Predictions"
+              title="Patient adherence insights"
+              description="Machine learning analysis of medication patterns and risk factors."
+            >
+              <PredictionsWidget patientId={state.patient?.id} variant="detailed" />
+            </SectionCard>
+
+            <div className="space-y-4">
+              <SectionCard
+                eyebrow="Settings & Tools"
+                title="Quick actions"
+                description="Manage preferences and export data"
+              >
+                <div className="space-y-4">
+                  <LanguageSelector variant="full" />
+                  <QuickActions
+                    patientId={state.patient?.id}
+                    showNotifications={true}
+                    showExport={true}
+                  />
+                </div>
+              </SectionCard>
+            </div>
           </div>
         </>
       )}

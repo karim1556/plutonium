@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell";
-import { ChatPanel } from "@/components/chat-panel";
+import { VoiceChatPanel } from "@/components/voice-chat-panel";
 import { PageIntro } from "@/components/page-intro";
 import { PatientSwitcher } from "@/components/patient-switcher";
 import { SectionCard } from "@/components/section-card";
@@ -23,18 +23,18 @@ export default async function ChatPage({
       session={session}
     >
       <PageIntro
-        eyebrow={session.role === "patient" ? "Guided Support" : "Care Assistant"}
+        eyebrow={session.role === "patient" ? "Voice & Text Chat" : "Care Assistant"}
         title={
           session.role === "patient"
-            ? "Ask for help in plain language"
+            ? "Ask for help using voice or text"
             : state.activePatient
-              ? `Use the assistant for ${state.activePatient.name}`
+              ? `Chat assistant for ${state.activePatient.name}`
               : "Connect a patient to start using the care assistant"
         }
         description={
           session.role === "patient"
-            ? "This assistant uses your medicine schedule and recent dose activity to answer in a simple, supportive way."
-            : "This assistant uses schedule, adherence, and refill context so you can make safer support decisions quickly."
+            ? "Speak or type your questions. MedAssist uses your medication schedule and activity to give personalized, supportive answers."
+            : "Use voice or text to ask about adherence, risks, and get AI-powered insights. Responses are read aloud automatically."
         }
         accent={session.role}
       />
@@ -55,12 +55,13 @@ export default async function ChatPage({
         </SectionCard>
       ) : (
         <>
-          <ChatPanel
+          <VoiceChatPanel
             schedules={state.schedules}
             logs={state.logs}
             medications={state.medications}
             role={state.role}
             promptStarters={state.promptStarters}
+            patientName={state.activePatient?.name}
           />
 
           <SectionCard
