@@ -40,8 +40,19 @@ void handleHealth() {
   body += deviceState.rtcReady ? "true" : "false";
   body += ",\"fingerprintReady\":";
   body += deviceState.fingerprintReady ? "true" : "false";
+  body += ",\"lcdReady\":";
+  body += deviceState.lcdReady ? "true" : "false";
+  body += ",\"lcdAddress\":\"";
+  char lcdAddressHex[7];
+  snprintf(lcdAddressHex, sizeof(lcdAddressHex), "0x%02X", deviceState.lcdAddress);
+  body += lcdAddressHex;
+  body += "\"";
   body += ",\"servoEnabled\":";
   body += SERVO_OUTPUT_ENABLED ? "true" : "false";
+  body += ",\"wheelAttached\":";
+  body += deviceState.wheelAttached ? "true" : "false";
+  body += ",\"doorAttached\":";
+  body += deviceState.doorAttached ? "true" : "false";
   body += ",\"chute\":";
   body += chuteSensorTriggered() ? "true" : "false";
   body += ",\"hand\":";
@@ -105,6 +116,21 @@ void handleWheelCalibration() {
   );
 }
 
+void handleWheelAlignment() {
+  if (!server.hasArg("angle")) {
+    server.send(400, "application/json", "{\"error\":\"angle query parameter required\"}");
+    return;
+  }
+
+  const int angle = server.arg("angle").toInt();
+  const bool moved = moveWheelForAlignment(angle);
+  server.send(
+    moved ? 200 : 409,
+    "application/json",
+    moved ? "{\"status\":\"wheel_aligned\"}" : "{\"status\":\"servo_output_disabled\"}"
+  );
+}
+
 void handleDoorCalibration() {
   if (!server.hasArg("angle")) {
     server.send(400, "application/json", "{\"error\":\"angle query parameter required\"}");
@@ -118,6 +144,67 @@ void handleDoorCalibration() {
     "application/json",
     moved ? "{\"status\":\"door_moved\"}" : "{\"status\":\"servo_output_disabled\"}"
   );
+}
+
+void handleServoTest() {
+  if (!SERVO_OUTPUT_ENABLED) {
+    server.send(409, "application/json", "{\"status\":\"servo_output_disabled\"}");
+    return;
+  }
+
+  attachServosIfEnabled();
+
+  if (!deviceState.wheelAttached && !deviceState.doorAttached) {
+    server.send(409, "application/json", "{\"status\":\"servo_attach_failed\"}");
+    return;
+  }
+
+  renderDisplay("Servo test", "Running pattern", "Check movement", "");
+
+  if (deviceState.wheelAttached) {
+    moveWheelToAngle(30);
+    moveWheelToAngle(150);
+    moveWheelToAngle(WHEEL_HOME_ANGLE);
+  }
+
+  if (deviceState.doorAttached) {
+    moveDoorToAngle(30);
+    moveDoorToAngle(120);
+    moveDoorToAngle(DOOR_CLOSED_ANGLE);
+  }
+
+  String body = "{";
+  body += "\"status\":\"servo_test_done\"";
+  body += ",\"wheelAttached\":";
+  body += deviceState.wheelAttached ? "true" : "false";
+  body += ",\"doorAttached\":";
+  body += deviceState.doorAttached ? "true" : "false";
+  body += "}";
+
+  server.send(200, "application/json", body);
+}
+
+void handleWheelSweepTest() {
+  if (!SERVO_OUTPUT_ENABLED) {
+    server.send(409, "application/json", "{\"status\":\"servo_output_disabled\"}");
+    return;
+  }
+
+  attachServosIfEnabled();
+  if (!deviceState.wheelAttached) {
+    server.send(409, "application/json", "{\"status\":\"wheel_attach_failed\"}");
+    return;
+  }
+
+  renderDisplay("Wheel sweep", "Running", "Look at wheel", "");
+
+  for (int i = 0; i < 3; i++) {
+    moveWheelToAngle(20);
+    moveWheelToAngle(160);
+  }
+  moveWheelToAngle(WHEEL_HOME_ANGLE);
+
+  server.send(200, "application/json", "{\"status\":\"wheel_sweep_done\"}");
 }
 
 void handleI2cScan() {
@@ -176,7 +263,10 @@ void setup() {
   server.on("/dispense", HTTP_POST, handleDispense);
   server.on("/log", HTTP_POST, handleManualLog);
   server.on("/calibrate/wheel", HTTP_POST, handleWheelCalibration);
+  server.on("/calibrate/wheel/align", HTTP_POST, handleWheelAlignment);
   server.on("/calibrate/door", HTTP_POST, handleDoorCalibration);
+  server.on("/servo/test", HTTP_POST, handleServoTest);
+  server.on("/servo/test/wheel-sweep", HTTP_POST, handleWheelSweepTest);
   server.on("/i2c/scan", HTTP_GET, handleI2cScan);
   server.begin();
 }

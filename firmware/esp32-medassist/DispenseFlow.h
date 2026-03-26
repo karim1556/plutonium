@@ -15,14 +15,22 @@ inline void attachServosIfEnabled() {
 
   if (!deviceState.wheelAttached) {
     wheelServo.setPeriodHertz(50);
-    wheelServo.attach(WHEEL_SERVO_PIN, 500, 2400);
-    deviceState.wheelAttached = true;
+    const int wheelChannel = wheelServo.attach(WHEEL_SERVO_PIN, 500, 2400);
+    deviceState.wheelAttached = wheelChannel >= 0;
+
+    if (!deviceState.wheelAttached) {
+      deviceState.lastStatus = "Wheel attach fail";
+    }
   }
 
   if (!deviceState.doorAttached) {
     doorServo.setPeriodHertz(50);
-    doorServo.attach(DOOR_SERVO_PIN, 500, 2400);
-    deviceState.doorAttached = true;
+    const int doorChannel = doorServo.attach(DOOR_SERVO_PIN, 500, 2400);
+    deviceState.doorAttached = doorChannel >= 0;
+
+    if (!deviceState.doorAttached) {
+      deviceState.lastStatus = "Door attach fail";
+    }
   }
 }
 
@@ -107,6 +115,21 @@ inline bool moveWheelForCalibration(int angle) {
 
   moveWheelToAngle(angle);
   renderDisplay("Wheel calibrate", "Angle " + String(angle), "", "");
+  return true;
+}
+
+inline bool moveWheelForAlignment(int angle) {
+  if (!SERVO_OUTPUT_ENABLED) {
+    return false;
+  }
+
+  const int target = constrain(angle, WHEEL_SERVO_MIN_ANGLE, WHEEL_SERVO_MAX_ANGLE);
+  const int preAlign = constrain(target - 12, WHEEL_SERVO_MIN_ANGLE, WHEEL_SERVO_MAX_ANGLE);
+
+  // Reduce gear backlash effects by always approaching final target from one side.
+  moveWheelToAngle(preAlign);
+  moveWheelToAngle(target);
+  renderDisplay("Wheel align", "Target " + String(target), "", "");
   return true;
 }
 

@@ -20,7 +20,7 @@ constexpr bool ENABLE_LOCAL_LONG_PRESS_DISPENSE = true;
 constexpr uint8_t LCD_I2C_ADDRESS = 0x27;
 constexpr uint8_t LCD_I2C_FALLBACK_ADDRESS = 0x3F;
 constexpr uint8_t LCD_COLUMNS = 16;
-constexpr uint8_t LCD_ROWS = 4;
+constexpr uint8_t LCD_ROWS = 2;
 
 const char* LCD_BOOT_LINE1 = "MedAssist Pro";
 const char* LCD_BOOT_LINE2 = "System Starting";
