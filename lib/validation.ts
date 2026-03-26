@@ -71,7 +71,14 @@ export const chatRequestSchema = z.object({
   patientId: uuidSchema.optional(),
   schedules: z.array(z.any()).optional(),
   logs: z.array(z.any()).optional(),
-  medications: z.array(z.any()).optional()
+  medications: z.array(z.any()).optional(),
+  conversationHistory: z.array(z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string(),
+    timestamp: z.date().optional(),
+  })).optional(),
+  patientName: z.string().optional(),
+  role: z.enum(["patient", "caregiver"]).optional()
 });
 
 // ============================================================================

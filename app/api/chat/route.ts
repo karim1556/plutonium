@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateSmartChatAnswer } from "@/lib/ai";
+import { generateEnhancedChatResponse, isOpenAIConfigured } from "@/lib/openai-service";
 import { getCurrentSessionUser } from "@/lib/auth";
 import { getChatState } from "@/lib/data";
 import { chatRequestSchema, formatValidationError } from "@/lib/validation";
@@ -41,14 +42,46 @@ export async function POST(request: Request) {
           }
         : await getChatState(session, payload.patientId);
 
-    const response = generateSmartChatAnswer({
-      question: payload.question,
-      schedules: state.schedules,
-      logs: state.logs,
-      medications: state.medications
-    });
+    let response;
 
-    return NextResponse.json(response);
+    // Use enhanced OpenAI service if configured, otherwise fallback to rule-based
+    if (isOpenAIConfigured()) {
+      try {
+        response = await generateEnhancedChatResponse({
+          question: payload.question,
+          schedules: state.schedules,
+          logs: state.logs,
+          medications: state.medications,
+          conversationHistory: payload.conversationHistory || [],
+          role: session.role,
+          patientName: payload.patientName || session.name,
+          locale: session.locale || 'en'
+        });
+      } catch (openaiError) {
+        console.warn('OpenAI service failed, falling back to rule-based:', openaiError);
+        // Fallback to rule-based system
+        response = generateSmartChatAnswer({
+          question: payload.question,
+          schedules: state.schedules,
+          logs: state.logs,
+          medications: state.medications
+        });
+      }
+    } else {
+      // Use rule-based system if OpenAI not configured
+      response = generateSmartChatAnswer({
+        question: payload.question,
+        schedules: state.schedules,
+        logs: state.logs,
+        medications: state.medications
+      });
+    }
+
+    return NextResponse.json({
+      ...response,
+      enhanced: isOpenAIConfigured(),
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
     console.error("Chat API error:", error);
     return NextResponse.json(

@@ -23,6 +23,7 @@ interface ChatMessage {
 
 export function VoiceChatPanel({ schedules, logs, medications, role, promptStarters, patientName }: VoiceChatPanelProps) {
   const [question, setQuestion] = useState("");
+  const [isEnhanced, setIsEnhanced] = useState<boolean | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
@@ -136,6 +137,15 @@ export function VoiceChatPanel({ schedules, logs, medications, role, promptStart
 
     startTransition(() => {
       void (async () => {
+        // Prepare conversation history for the API (exclude the greeting message and current user message)
+        const conversationHistory = messages
+          .slice(1) // Skip the initial greeting
+          .map(msg => ({
+            role: msg.role,
+            content: msg.content,
+            timestamp: msg.timestamp
+          }));
+
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -143,11 +153,24 @@ export function VoiceChatPanel({ schedules, logs, medications, role, promptStart
             question: currentQuestion,
             schedules,
             logs,
-            medications
+            medications,
+            conversationHistory,
+            patientName,
+            role
           })
         });
 
-        const payload = (await response.json()) as { answer: string; safety: string };
+        const payload = (await response.json()) as {
+          answer: string;
+          safety: string;
+          enhanced?: boolean;
+          timestamp?: string;
+        };
+
+        // Update enhanced status
+        if (payload.enhanced !== undefined) {
+          setIsEnhanced(payload.enhanced);
+        }
 
         const assistantMessage: ChatMessage = {
           role: "assistant",
@@ -189,9 +212,20 @@ export function VoiceChatPanel({ schedules, logs, medications, role, promptStart
             </div>
             <div>
               <p className="font-semibold text-slate-900">MedAssist Chat</p>
-              <p className="text-xs text-slate-500">
-                {role === "patient" ? "Your personal medication helper" : "Care monitoring assistant"}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-slate-500">
+                  {role === "patient" ? "Your personal medication helper" : "Care monitoring assistant"}
+                </p>
+                {isEnhanced !== null && (
+                  <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                    isEnhanced
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-slate-100 text-slate-600"
+                  }`}>
+                    {isEnhanced ? "🧠 GPT-4" : "📋 Standard"}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -356,6 +390,24 @@ export function VoiceChatPanel({ schedules, logs, medications, role, promptStart
             <p>{logs.length} recent logs</p>
             <p>{medications.length} medications tracked</p>
           </div>
+          {isEnhanced !== null && (
+            <div className="mt-3 pt-3 border-t border-slate-100">
+              <div className={`rounded-lg px-3 py-2 text-xs ${
+                isEnhanced
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-slate-50 text-slate-600"
+              }`}>
+                <p className="font-medium">
+                  {isEnhanced ? "🧠 GPT-4 Enhanced" : "📋 Standard Mode"}
+                </p>
+                <p className="mt-1">
+                  {isEnhanced
+                    ? "Conversational AI with memory"
+                    : "Rule-based responses"}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
