@@ -21,6 +21,8 @@ WebServer server(80);
 Servo wheelServo;
 Servo doorServo;
 LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
+LiquidCrystal_I2C lcdFallback(LCD_I2C_FALLBACK_ADDRESS, LCD_COLUMNS, LCD_ROWS);
+LiquidCrystal_I2C* activeLcd = &lcd;
 RTC_DS3231 rtc;
 DeviceState deviceState;
 
@@ -118,6 +120,15 @@ void handleDoorCalibration() {
   );
 }
 
+void handleI2cScan() {
+  String body = "{";
+  body += "\"devices\":";
+  body += scanI2cBusJson();
+  body += "}";
+
+  server.send(200, "application/json", body);
+}
+
 void updateLongPressDispense() {
   if (!ENABLE_LOCAL_LONG_PRESS_DISPENSE || deviceState.isDispensing) {
     return;
@@ -166,6 +177,7 @@ void setup() {
   server.on("/log", HTTP_POST, handleManualLog);
   server.on("/calibrate/wheel", HTTP_POST, handleWheelCalibration);
   server.on("/calibrate/door", HTTP_POST, handleDoorCalibration);
+  server.on("/i2c/scan", HTTP_GET, handleI2cScan);
   server.begin();
 }
 

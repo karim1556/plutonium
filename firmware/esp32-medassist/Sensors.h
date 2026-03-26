@@ -24,8 +24,8 @@ inline void printDisplayLine(uint8_t row, const String& text) {
     return;
   }
 
-  lcd.setCursor(0, row);
-  lcd.print(fitToLcd(text));
+  activeLcd->setCursor(0, row);
+  activeLcd->print(fitToLcd(text));
 }
 
 inline void renderDisplay(
@@ -76,10 +76,10 @@ inline void refreshIdleDisplay() {
     return;
   }
 
-  const String line1 = "Time " + timeLabel();
-  const String line2 = "Slot " + String(deviceState.currentSlot) + (SERVO_OUTPUT_ENABLED ? " Armed" : " Bench");
-  const String line3 = String(deviceState.wifiConnected ? "WiFi" : "NoWiFi") + " " +
-    String(deviceState.fingerprintReady ? "FP" : "NoFP");
+  const String line1 = "MedAssist " + timeLabel();
+  const String line2 = "Slot " + String(deviceState.currentSlot) + (SERVO_OUTPUT_ENABLED ? " Ready" : " Bench");
+  const String line3 = String(deviceState.wifiConnected ? "WiFi ON" : "WiFi OFF") + " " +
+    String(deviceState.fingerprintReady ? "FP ON" : "FP OFF");
   const String line4 = "C" + String(chuteSensorTriggered() ? 1 : 0) +
     " H" + String(handSensorTriggered() ? 1 : 0) +
     " S" + String(manualSwitchPressed() ? 1 : 0);
@@ -108,11 +108,61 @@ inline void initializeI2cBus() {
   Wire.begin(LCD_SDA_PIN, LCD_SCL_PIN);
 }
 
+inline bool i2cAddressPresent(uint8_t address) {
+  Wire.beginTransmission(address);
+  return Wire.endTransmission() == 0;
+}
+
+inline String scanI2cBusJson() {
+  String json = "[";
+
+  for (uint8_t address = 1; address < 127; address += 1) {
+    Wire.beginTransmission(address);
+
+    if (Wire.endTransmission() == 0) {
+      if (json.length() > 1) {
+        json += ",";
+      }
+
+      char hexAddress[7];
+      snprintf(hexAddress, sizeof(hexAddress), "0x%02X", address);
+      json += "\"";
+      json += hexAddress;
+      json += "\"";
+    }
+  }
+
+  json += "]";
+  return json;
+}
+
 inline void initializeDisplay() {
-  lcd.init();
-  lcd.backlight();
+  const bool primaryPresent = i2cAddressPresent(LCD_I2C_ADDRESS);
+  const bool fallbackPresent = i2cAddressPresent(LCD_I2C_FALLBACK_ADDRESS);
+
+  if (!primaryPresent && !fallbackPresent) {
+    deviceState.lcdReady = false;
+    deviceState.lcdAddress = 0;
+    deviceState.lastStatus = "LCD not found";
+    return;
+  }
+
+  if (primaryPresent) {
+    activeLcd = &lcd;
+    deviceState.lcdAddress = LCD_I2C_ADDRESS;
+  } else {
+    activeLcd = &lcdFallback;
+    deviceState.lcdAddress = LCD_I2C_FALLBACK_ADDRESS;
+  }
+
+  activeLcd->init();
+  activeLcd->backlight();
+  activeLcd->clear();
   deviceState.lcdReady = true;
-  renderDisplay("MedAssist Pro", "Booting logic", "Bench-safe mode", "Servo off by cfg");
+
+  char lcdAddressLine[17];
+  snprintf(lcdAddressLine, sizeof(lcdAddressLine), "LCD 0x%02X", deviceState.lcdAddress);
+  renderDisplay(LCD_BOOT_LINE1, LCD_BOOT_LINE2, LCD_BOOT_LINE3, String(lcdAddressLine));
 }
 
 inline void initializeRtc() {

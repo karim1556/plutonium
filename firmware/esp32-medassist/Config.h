@@ -5,21 +5,27 @@
 const char* WIFI_SSID = "SNEHA";
 const char* WIFI_PASSWORD = "2005sneha";
 const char* BACKEND_EVENT_URL = "http://192.168.0.108:3000/api/device/event";
-const char* DEVICE_ID = "device-prod-1";
+const char* DEVICE_ID = "71deb4a9-fa30-469e-ae92-731cf4516b52";
 const char* DEVICE_SHARED_KEY = "e6fc750b9dd41f2a6b956bc2e7baaa80a2c970ed856bb273";
 
 // Keep servo motion disabled for first bring-up. Turn this on only after:
 // 1. the wheel angles are calibrated
 // 2. the door angles are calibrated
 // 3. the servos have a stable external supply
-constexpr bool SERVO_OUTPUT_ENABLED = false;
-constexpr bool REQUIRE_FINGERPRINT = true;
+constexpr bool SERVO_OUTPUT_ENABLED = true;
+constexpr bool REQUIRE_FINGERPRINT = false;
 constexpr bool AUTO_SET_RTC_FROM_BUILD_TIME = false;
 constexpr bool ENABLE_LOCAL_LONG_PRESS_DISPENSE = true;
 
 constexpr uint8_t LCD_I2C_ADDRESS = 0x27;
+constexpr uint8_t LCD_I2C_FALLBACK_ADDRESS = 0x3F;
 constexpr uint8_t LCD_COLUMNS = 16;
 constexpr uint8_t LCD_ROWS = 4;
+
+const char* LCD_BOOT_LINE1 = "MedAssist Pro";
+const char* LCD_BOOT_LINE2 = "System Starting";
+const char* LCD_BOOT_LINE3 = "ESP32 Online";
+const char* LCD_BOOT_LINE4 = "Sensors + Servo";
 
 constexpr int SLOT_COUNT = 5;
 constexpr unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000;

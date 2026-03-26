@@ -1170,6 +1170,22 @@ export async function registerOrUpdateDevice(input: {
   };
 }
 
+function getDeviceStatusForHardwareEvent(event: HardwareEvent): Device["status"] {
+  if (event === "offline") {
+    return "offline";
+  }
+
+  if (event === "unauthorized" || event === "stuck_retry") {
+    return "alert";
+  }
+
+  if (event === "dispense_requested" || event === "dispensed") {
+    return "dispensing";
+  }
+
+  return "online";
+}
+
 export async function recordHardwareEvent(input: {
   deviceId: string;
   event: HardwareEvent;
@@ -1187,6 +1203,8 @@ export async function recordHardwareEvent(input: {
     };
   }
 
+  const eventTimestamp = input.timestamp ?? new Date().toISOString();
+
   const { data: slot } =
     typeof input.slotNumber === "number"
       ? await service
@@ -1197,11 +1215,28 @@ export async function recordHardwareEvent(input: {
           .maybeSingle()
       : { data: null };
 
+  const deviceUpdatePayload: {
+    status: Device["status"];
+    last_seen: string;
+    last_activity: string;
+    current_slot?: number;
+  } = {
+    status: getDeviceStatusForHardwareEvent(input.event),
+    last_seen: eventTimestamp,
+    last_activity: eventTimestamp
+  };
+
+  if (typeof input.slotNumber === "number") {
+    deviceUpdatePayload.current_slot = input.slotNumber;
+  }
+
+  await service.from("devices").update(deviceUpdatePayload).eq("id", input.deviceId);
+
   await service.from("hardware_logs").insert({
     device_id: input.deviceId,
     slot_id: slot?.id ?? null,
     event: input.event,
-    timestamp: input.timestamp ?? new Date().toISOString(),
+    timestamp: eventTimestamp,
     details: input.details ?? null
   });
 
@@ -1212,7 +1247,7 @@ export async function recordHardwareEvent(input: {
         schedule_id: scheduleId,
         status,
         source: input.event === "pickup_confirmed" ? "sensor" : "system",
-        timestamp: input.timestamp ?? new Date().toISOString(),
+        timestamp: eventTimestamp,
         notes: input.details ?? null
       }))
     );

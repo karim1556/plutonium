@@ -13,4 +13,6 @@ extern WebServer server;
 extern Servo wheelServo;
 extern Servo doorServo;
 extern LiquidCrystal_I2C lcd;
+extern LiquidCrystal_I2C lcdFallback;
+extern LiquidCrystal_I2C* activeLcd;
 extern RTC_DS3231 rtc;

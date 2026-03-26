@@ -10,6 +10,7 @@ struct DeviceState {
   bool wifiConnected = false;
   bool rtcReady = false;
   bool lcdReady = false;
+  uint8_t lcdAddress = 0;
   bool fingerprintReady = false;
   bool wheelAttached = false;
   bool doorAttached = false;
