@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <time.h>
 #include <WiFi.h>
 #include <Wire.h>
 #include "Config.h"
@@ -178,10 +179,61 @@ inline void initializeRtc() {
   }
 }
 
+inline bool syncRtcFromNtp() {
+  if (!RTC_SYNC_FROM_NTP_ON_BOOT || !deviceState.rtcReady || WiFi.status() != WL_CONNECTED) {
+    return false;
+  }
+
+  configTime(NTP_GMT_OFFSET_SEC, NTP_DAYLIGHT_OFFSET_SEC, NTP_SERVER_1, NTP_SERVER_2);
+
+  struct tm timeInfo;
+  const bool synced = getLocalTime(&timeInfo, NTP_SYNC_TIMEOUT_MS);
+  if (!synced) {
+    deviceState.lastStatus = "NTP sync fail";
+    return false;
+  }
+
+  rtc.adjust(DateTime(
+    timeInfo.tm_year + 1900,
+    timeInfo.tm_mon + 1,
+    timeInfo.tm_mday,
+    timeInfo.tm_hour,
+    timeInfo.tm_min,
+    timeInfo.tm_sec
+  ));
+
+  deviceState.lastStatus = "RTC synced NTP";
+  return true;
+}
+
 inline void initializeFingerprint() {
-  FingerSerial.begin(57600, SERIAL_8N1, FINGERPRINT_RX_PIN, FINGERPRINT_TX_PIN);
+  delay(500); // Give sensor a half-second to boot before pinging it
+
+  FingerSerial.begin(57600);
   finger.begin(57600);
-  deviceState.fingerprintReady = finger.verifyPassword();
+  delay(100);
+  
+  if (finger.verifyPassword()) {
+    deviceState.fingerprintReady = true;
+    return;
+  }
+
+  // Fallback 1: Some clones use 9600 baud out of the box
+  FingerSerial.begin(9600);
+  if (finger.verifyPassword()) {
+    deviceState.fingerprintReady = true;
+    return;
+  }
+
+  // Fallback 2: Some use 115200 baud
+  FingerSerial.begin(115200);
+  if (finger.verifyPassword()) {
+    deviceState.fingerprintReady = true;
+    return;
+  }
+
+  // If all fail, it's not detected
+  deviceState.fingerprintReady = false;
 }
 
 inline bool authorizeFingerprint() {
@@ -196,7 +248,7 @@ inline bool authorizeFingerprint() {
     return false;
   }
 
-  renderDisplay("Scan Finger", "Slot " + String(deviceState.currentSlot), "", "Timeout 10 sec");
+  renderDisplay("Machine Ready", "Dose waiting...", "Scan Fingerprint", "Timeout 60 sec");
   unsigned long startedAt = millis();
 
   while (millis() - startedAt < FINGERPRINT_TIMEOUT_MS) {

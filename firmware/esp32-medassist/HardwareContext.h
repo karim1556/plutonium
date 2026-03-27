@@ -1,5 +1,6 @@
 #pragma once
 
+#include <SoftwareSerial.h>
 #include <Adafruit_Fingerprint.h>
 #include <ESP32Servo.h>
 #include <LiquidCrystal_I2C.h>
@@ -7,7 +8,7 @@
 #include <WebServer.h>
 #include <Wire.h>
 
-extern HardwareSerial FingerSerial;
+extern SoftwareSerial FingerSerial;
 extern Adafruit_Fingerprint finger;
 extern WebServer server;
 extern Servo wheelServo;

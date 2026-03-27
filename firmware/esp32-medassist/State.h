@@ -36,6 +36,9 @@ struct DeviceState {
   unsigned long lastScheduleSyncAt = 0;
   bool lastScheduleSyncOk = false;
   int lastProcessedDay = -1;
+  unsigned long lastAutoDispenseAt = 0;
+  String lastAutoDispenseAttemptScheduleId = "";
+  unsigned long lastAutoDispenseAttemptAt = 0;
   String activeScheduleIds = "[]";
   String lastStatus = "Booting";
 };

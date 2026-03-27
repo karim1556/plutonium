@@ -215,17 +215,6 @@ inline bool dispenseFlow(int slot) {
     return false;
   }
 
-  if (!authorizeFingerprint()) {
-    setErrorLights();
-    pulseBuzzer(4, 180);
-    sendDeviceEvent("unauthorized", slot, "Fingerprint authorization failed.");
-    deviceState.isDispensing = false;
-    renderDisplay("Access denied", "Fingerprint fail", "", "");
-    delay(1200);
-    setIdleLights();
-    return false;
-  }
-
   closeFlap();
   renderDisplay("Dispensing", "Rotating wheel", "Slot " + String(slot), "");
   rotateToSlot(slot);
@@ -238,6 +227,18 @@ inline bool dispenseFlow(int slot) {
 
   renderDisplay("Dispensing", "Wheel reset", "Returning home", "");
   moveWheelToAngle(WHEEL_RESET_ANGLE);
+
+  // The pill is now resting against the final door. WE WAIT FOR FINGERPRINT NOW!
+  if (!authorizeFingerprint()) {
+    setErrorLights();
+    pulseBuzzer(4, 180);
+    sendDeviceEvent("unauthorized", slot, "Fingerprint authorization failed at final gate.");
+    deviceState.isDispensing = false;
+    renderDisplay("Access denied", "Fingerprint fail", "", "");
+    delay(1200);
+    setIdleLights();
+    return false;
+  }
 
   renderDisplay("Dispensing", "Opening gate", "Watch chute IR", "");
   openDoor();

@@ -16,7 +16,9 @@
 #include "Sensors.h"
 #include "State.h"
 
-HardwareSerial FingerSerial(2);
+#include <SoftwareSerial.h>
+
+SoftwareSerial FingerSerial(FINGERPRINT_RX_PIN, FINGERPRINT_TX_PIN);
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&FingerSerial);
 WebServer server(80);
 Servo wheelServo;
@@ -236,6 +238,103 @@ void handleI2cScan() {
   server.send(200, "application/json", body);
 }
 
+void handleEnroll() {
+  if (!server.hasArg("id")) {
+    server.send(400, "application/json", "{\"error\":\"id parameter required. Example: /enroll?id=1\"}");
+    return;
+  }
+  
+  int id = server.arg("id").toInt();
+  if (id < 1 || id > 127) {
+    server.send(400, "application/json", "{\"error\":\"id must be between 1 and 127\"}");
+    return;
+  }
+  
+  if (!deviceState.fingerprintReady) {
+    server.send(500, "application/json", "{\"error\":\"Fingerprint sensor not ready or not connected properly\"}");
+    return;
+  }
+
+  deviceState.isDispensing = true; // Lock display refreshes while enrolling
+  
+  renderDisplay("Enroll Finger", "ID: " + String(id), "Place finger now", "");
+  
+  int p = -1;
+  unsigned long start = millis();
+  while (p != FINGERPRINT_OK && millis() - start < 15000) {
+    p = finger.getImage();
+    delay(100);
+  }
+  if (p != FINGERPRINT_OK) {
+    renderDisplay("Enroll Failed", "Timeout / No finger", "", "");
+    server.send(500, "application/json", "{\"error\":\"Timeout waiting for finger. Please try again.\"}");
+    delay(2000);
+    deviceState.isDispensing = false;
+    return;
+  }
+  
+  p = finger.image2Tz(1);
+  if (p != FINGERPRINT_OK) {
+    renderDisplay("Enroll Failed", "Bad image", "", "");
+    server.send(500, "application/json", "{\"error\":\"Error converting image. Place finger steadily.\"}");
+    delay(2000);
+    deviceState.isDispensing = false;
+    return;
+  }
+  
+  renderDisplay("Enroll Finger", "Remove finger", "", "");
+  p = 0;
+  while (p != FINGERPRINT_NOFINGER) {
+    p = finger.getImage();
+    delay(100);
+  }
+  
+  renderDisplay("Enroll Finger", "Place SAME finger", "Again...", "");
+  p = -1;
+  start = millis();
+  while (p != FINGERPRINT_OK && millis() - start < 15000) {
+    p = finger.getImage();
+    delay(100);
+  }
+  if (p != FINGERPRINT_OK) {
+    renderDisplay("Enroll Failed", "Timeout phase 2", "", "");
+    server.send(500, "application/json", "{\"error\":\"Timeout waiting for the same finger.\"}");
+    delay(2000);
+    deviceState.isDispensing = false;
+    return;
+  }
+  
+  p = finger.image2Tz(2);
+  if (p != FINGERPRINT_OK) {
+    renderDisplay("Enroll Failed", "Bad image 2", "", "");
+    server.send(500, "application/json", "{\"error\":\"Error converting second image.\"}");
+    delay(2000);
+    deviceState.isDispensing = false;
+    return;
+  }
+  
+  p = finger.createModel();
+  if (p != FINGERPRINT_OK) {
+    renderDisplay("Enroll Failed", "Prints dont match", "Try again", "");
+    server.send(500, "application/json", "{\"error\":\"Fingerprints did not match. Please try again.\"}");
+    delay(2000);
+    deviceState.isDispensing = false;
+    return;
+  }
+  
+  p = finger.storeModel(id);
+  if (p == FINGERPRINT_OK) {
+    renderDisplay("Enroll Success!", "ID: " + String(id), "Saved in sensor", "");
+    server.send(200, "application/json", "{\"status\":\"enrolled\",\"id\":" + String(id) + "}");
+  } else {
+    renderDisplay("Enroll Failed", "Storage error", "", "");
+    server.send(500, "application/json", "{\"error\":\"Failed to store model in the sensor's memory.\"}");
+  }
+
+  delay(2000);
+  deviceState.isDispensing = false;
+}
+
 void updateLongPressDispense() {
   if (!ENABLE_LOCAL_LONG_PRESS_DISPENSE || deviceState.isDispensing) {
     return;
@@ -276,12 +375,10 @@ void setup() {
   initializeRtc();
   initializeFingerprint();
   connectWiFi();
+  syncRtcFromNtp();
 
   if (SERVO_OUTPUT_ENABLED) {
     attachServosIfEnabled();
-    closeFlap();
-    moveWheelToAngle(WHEEL_RESET_ANGLE);
-    closeDoor();
   }
 
   deviceState.lastStatus = SERVO_OUTPUT_ENABLED ? "Ready for calibration" : "Bench-safe mode";
@@ -296,6 +393,7 @@ void setup() {
   server.on("/servo/test", HTTP_POST, handleServoTest);
   server.on("/servo/test/wheel-sweep", HTTP_POST, handleWheelSweepTest);
   server.on("/i2c/scan", HTTP_GET, handleI2cScan);
+  server.on("/enroll", HTTP_POST, handleEnroll);
   server.begin();
 }
 

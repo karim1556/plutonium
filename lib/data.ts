@@ -984,7 +984,7 @@ export async function saveScheduleBundlesForPatient(input: {
 
   if (updates.length) {
     for (const row of updates) {
-      await service
+      const { error } = await service
         .from("schedules")
         .update({
           slot_id: row.slot_id,
@@ -995,15 +995,34 @@ export async function saveScheduleBundlesForPatient(input: {
           status: row.status
         })
         .eq("id", row.id);
+
+      if (error) {
+        return {
+          ok: false,
+          reason: `Schedule update failed: ${error.message}`
+        };
+      }
+    }
+  }
+
+  if (inserts.length) {
+    const { error } = await service.from("schedules").insert(inserts);
+    if (error) {
+      return {
+        ok: false,
+        reason: `Schedule insert failed: ${error.message}`
+      };
     }
   }
 
   if (deletes.length) {
-    await service.from("schedules").delete().in("id", deletes);
-  }
-
-  if (inserts.length) {
-    await service.from("schedules").insert(inserts);
+    const { error } = await service.from("schedules").delete().in("id", deletes);
+    if (error) {
+      return {
+        ok: false,
+        reason: `Schedule delete failed: ${error.message}`
+      };
+    }
   }
 
   return {
