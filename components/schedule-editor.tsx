@@ -60,7 +60,8 @@ export function ScheduleEditor({
             patientId,
             medications,
             slots,
-            logs
+            logs,
+            schedules
           })
         });
 

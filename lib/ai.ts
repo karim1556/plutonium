@@ -27,13 +27,52 @@ const MEAL_WORDS = new Set(["before", "after", "with", "food", "meal", "meals"])
 const TIMING_WORDS = new Set(["morning", "afternoon", "evening", "night", "sos", "prn"]);
 const DURATION_WORDS = new Set(["day", "days", "week", "weeks", "month", "months"]);
 
+// Patterns that indicate a line is patient/header info, not a medication
+const HEADER_PATTERNS = [
+  /^(name|patient|pat|pt|mame|naam)\s*:/i,
+  /^(age|dob|date\s*of\s*birth)\s*:/i,
+  /^(sex|gender|m\/f)\s*[:/]?/i,
+  /^(dr|doctor|physician|ref|regd?|reg\.?)\s*[.:]?/i,
+  /^(date|dt|time)\s*:/i,
+  /^(address|add|addr)\s*:/i,
+  /^(rx|℞)\s*$/i,
+  /^(diagnosis|diag|complaint|c\/o)\s*:/i,
+  /^https?:\/\//i,               // URLs
+  /^www\./i,
+  /^[^a-z]*$/i,                   // No letters at all (pure symbols/numbers)
+  /^\W+/,                         // Starts with non-word chars only
+];
+
+// A line must contain at least one of these signals to be treated as a medication
+const MEDICATION_SIGNALS = [
+  /\d+\s*(mg|ml|iu|mcg|g)\b/i,                          // dosage unit
+  /\b(tab|tablet|cap|capsule|syrup|drop|cream|gel|inj|injection|oint|suspension|spray)\b/i,
+  /\b(od|bd|tds|tid|qid|sos|prn|stat|once|twice|thrice|\d+x)\b/i,  // frequency
+  /\b(day|days|week|weeks|month|months)\b/i,              // duration
+  /\b(after|before|with)\s+(food|meal|meals)\b/i,         // meal relation
+];
+
+function isMedicationLine(line: string): boolean {
+  // Reject lines that match header patterns
+  if (HEADER_PATTERNS.some((pattern) => pattern.test(line.trim()))) return false;
+
+  // Reject very short lines (under 4 chars) — likely noise
+  if (line.trim().length < 4) return false;
+
+  // Must contain at least one medication signal
+  return MEDICATION_SIGNALS.some((signal) => signal.test(line));
+}
+
 export function parsePrescriptionText(rawText: string) {
-  const cleaned = rawText
+  const allLines = rawText
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
 
-  const medications: ParsedPrescriptionMedication[] = cleaned.map((line) => {
+  // Only keep lines that look like actual medication entries
+  const medicationLines = allLines.filter(isMedicationLine);
+
+  const medications: ParsedPrescriptionMedication[] = medicationLines.map((line) => {
     const durationMatch = line.match(/(\d+)\s*(day|days|week|weeks)/i);
     const dosageMatch = line.match(/(\d+\s?(mg|ml|iu|mcg|g|tablet|cap|capsule))/i);
     const tokens = line.split(/\s+/);
@@ -45,22 +84,17 @@ export function parsePrescriptionText(rawText: string) {
       ? Number(durationMatch[1]) * (durationMatch[2].toLowerCase().startsWith("week") ? 7 : 1)
       : 30;
 
-    // Extract medicine name - filter out numbers, abbreviations, meal words, and timing words
+    // Extract medicine name — strip numbers, units, abbrevs, meal/timing/duration words
     const nameTokens = tokens.filter((token) => {
-      const lower = token.toLowerCase();
+      const lower = token.toLowerCase().replace(/[^a-z]/g, "");
       return (
-        !token.match(/^\d/) && // Not a number
-        !ABBREVIATIONS[lower] && // Not a frequency abbreviation
-        !MEAL_WORDS.has(lower) && // Not a meal-related word
-        !TIMING_WORDS.has(lower) && // Not a timing word
-        !DURATION_WORDS.has(lower) && // Not a duration word
-        !lower.includes("mg") && // Not dosage units
-        !lower.includes("ml") &&
-        !lower.includes("iu") &&
-        !lower.includes("mcg") &&
-        !lower.includes("g") &&
-        !lower.includes("tablet") &&
-        !lower.includes("cap")
+        lower.length > 1 &&
+        !token.match(/^\d/) &&
+        !ABBREVIATIONS[lower] &&
+        !MEAL_WORDS.has(lower) &&
+        !TIMING_WORDS.has(lower) &&
+        !DURATION_WORDS.has(lower) &&
+        !/^(mg|ml|iu|mcg|tablet|tab|cap|capsule|syrup|drop|inj|oint|gel|cream|spray)s?$/i.test(lower)
       );
     });
 
@@ -92,14 +126,14 @@ export function parsePrescriptionText(rawText: string) {
       instructions: lower.includes("sos")
         ? ["Take only when required and with clinician advice."]
         : ["Confirm with the doctor if handwriting was unclear."],
-      confidence: lower.length > 12 ? 0.88 : 0.64
+      confidence: dosageMatch ? 0.91 : 0.70
     };
   });
 
   return {
     medications,
     notes: [
-      "You can plug in Tesseract, Google Vision, or Azure OCR to convert uploaded images into text automatically.",
+      "Only lines containing a dosage, frequency, or duration are treated as medications.",
       "Abbreviations such as OD and BD are expanded into daily frequency automatically."
     ]
   };

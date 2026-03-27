@@ -5,6 +5,7 @@ import { extractHour, getTodayIsoDate } from "@/lib/utils";
 interface SchedulerOptions {
   wakeTime?: string;
   scheduledDate?: string;
+  slotAssignments?: Record<string, number>;
 }
 
 function normalizeName(value: string) {
@@ -52,7 +53,20 @@ export function deriveTimesForMedication(
   return adaptive[medication.frequency] ?? fallbackByFrequency[1];
 }
 
-export function resolveSlotForMedication(medication: Medication, slots: Slot[]) {
+export function resolveSlotForMedication(
+  medication: Medication,
+  slots: Slot[],
+  assignmentMap?: Record<string, number>
+) {
+  // If the user explicitly assigned a slot for this medication via the UI
+  if (assignmentMap) {
+    const assignedSlotId = assignmentMap[medication.name];
+    if (assignedSlotId !== undefined) {
+      const explicitSlot = slots.find((slot) => slot.id === assignedSlotId);
+      if (explicitSlot) return explicitSlot;
+    }
+  }
+
   const byConfiguredMedicine = slots.find((slot) =>
     slot.medicines.map(normalizeName).includes(normalizeName(medication.name))
   );
@@ -71,10 +85,16 @@ export function generateScheduleFromMedications(
 ) {
   const scheduledDate = options.scheduledDate ?? getTodayIsoDate();
   const wakeTime = options.wakeTime ?? "07:00";
+  const slotAssignments = options.slotAssignments;
   const grouped = new Map<string, ScheduleItem>();
 
   medications.forEach((medication) => {
-    const slot = resolveSlotForMedication(medication, slots);
+    // Pass the user's explicit slot choices down to the resolver
+    const slot = resolveSlotForMedication(medication, slots, slotAssignments);
+
+    // Safety fallback if no slot exists at all
+    if (!slot) return;
+
     const times = deriveTimesForMedication(medication, wakeTime);
 
     times.forEach((time) => {

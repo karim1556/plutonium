@@ -12,6 +12,7 @@ extern Adafruit_Fingerprint finger;
 extern WebServer server;
 extern Servo wheelServo;
 extern Servo doorServo;
+extern Servo flapServo;
 extern LiquidCrystal_I2C lcd;
 extern LiquidCrystal_I2C lcdFallback;
 extern LiquidCrystal_I2C* activeLcd;

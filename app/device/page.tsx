@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { DeviceRegistrationForm } from "@/components/device-registration-form";
 import { DispenseButton } from "@/components/dispense-button";
+import { EditDeviceIp } from "@/components/edit-device-ip";
 import { PageIntro } from "@/components/page-intro";
 import { PatientSwitcher } from "@/components/patient-switcher";
 import { SectionCard } from "@/components/section-card";
@@ -102,7 +103,12 @@ export default async function DevicePage({
                 <p className="text-sm leading-6 text-slate-600">Current slot: {state.device.currentSlot}</p>
                 {state.role === "caregiver" ? (
                   <>
-                    <p className="mt-3 text-sm leading-6 text-slate-600">IP: {state.device.ipAddress}</p>
+                    <EditDeviceIp 
+                      patientId={state.activePatient.id}
+                      currentIp={state.device.ipAddress}
+                      firmwareVersion={state.device.firmwareVersion ?? null}
+                      requiresFingerprint={state.device.requiresFingerprint}
+                    />
                     <p className="text-sm leading-6 text-slate-600">Firmware: {state.device.firmwareVersion ?? "Unknown"}</p>
                     <p className="text-sm leading-6 text-slate-600">Last seen: {formatTimestamp(state.device.lastSeen)}</p>
                   </>

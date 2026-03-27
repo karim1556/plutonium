@@ -168,7 +168,12 @@ inline void initializeDisplay() {
 inline void initializeRtc() {
   deviceState.rtcReady = rtc.begin();
 
-  if (deviceState.rtcReady && rtc.lostPower() && AUTO_SET_RTC_FROM_BUILD_TIME) {
+  if (!deviceState.rtcReady) {
+    deviceState.lastStatus = "RTC init fail";
+    return;
+  }
+
+  if (deviceState.rtcReady && AUTO_SET_RTC_FROM_BUILD_TIME) {
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }
 }

@@ -47,6 +47,7 @@ export interface ParsedPrescriptionMedication {
   timing: MedicationTiming;
   instructions: string[];
   confidence: number;
+  slotId?: number;
 }
 
 export interface ScheduleItem {

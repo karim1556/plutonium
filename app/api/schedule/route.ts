@@ -65,9 +65,20 @@ export async function POST(request: Request) {
     );
   }
 
+  // Preserve any existing slot assignments before regenerating
+  const slotAssignments: Record<string, number> = {};
+  const currentSchedules = state?.schedules || payload.schedules || [];
+  for (const schedule of currentSchedules) {
+    for (const medicineName of schedule.medicines) {
+      // Map each medicine name to its currently assigned slot
+      slotAssignments[medicineName] = schedule.slotId;
+    }
+  }
+
   const schedules = generateScheduleFromMedications(medications, slots, {
     wakeTime: payload.wakeTime,
-    scheduledDate: payload.scheduledDate
+    scheduledDate: payload.scheduledDate,
+    slotAssignments
   });
 
   const recommendations = schedules.map((schedule) => ({

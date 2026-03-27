@@ -3,11 +3,22 @@ import { buildMedicationContext } from './ai';
 import type { DoseLog, Medication, ScheduleItem } from '@/types/medication';
 
 // Lazy initialize OpenAI client only when needed
+let aiModel = 'gpt-4o';
+
 function getOpenAIClient(): OpenAI | null {
+  if (process.env.GROQ_API_KEY) {
+    aiModel = 'llama-3.3-70b-versatile';
+    return new OpenAI({
+      apiKey: process.env.GROQ_API_KEY,
+      baseURL: "https://api.groq.com/openai/v1"
+    });
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     return null;
   }
 
+  aiModel = 'gpt-4o';
   return new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
   });
@@ -68,9 +79,9 @@ export async function generateEnhancedChatResponse({
       throw new Error('OpenAI client not available - no API key configured');
     }
 
-    // Call OpenAI GPT-4
+    // Call OpenAI/Groq
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o', // Latest GPT-4 model
+      model: aiModel,
       messages,
       max_tokens: 300,
       temperature: 0.7,

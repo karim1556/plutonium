@@ -12,6 +12,7 @@
 #include "HardwareContext.h"
 #include "Indicators.h"
 #include "Pins.h"
+#include "ScheduleRunner.h"
 #include "Sensors.h"
 #include "State.h"
 
@@ -20,6 +21,7 @@ Adafruit_Fingerprint finger = Adafruit_Fingerprint(&FingerSerial);
 WebServer server(80);
 Servo wheelServo;
 Servo doorServo;
+Servo flapServo;
 LiquidCrystal_I2C lcd(LCD_I2C_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 LiquidCrystal_I2C lcdFallback(LCD_I2C_FALLBACK_ADDRESS, LCD_COLUMNS, LCD_ROWS);
 LiquidCrystal_I2C* activeLcd = &lcd;
@@ -53,6 +55,16 @@ void handleHealth() {
   body += deviceState.wheelAttached ? "true" : "false";
   body += ",\"doorAttached\":";
   body += deviceState.doorAttached ? "true" : "false";
+  body += ",\"flapAttached\":";
+  body += deviceState.flapAttached ? "true" : "false";
+  body += ",\"flapEnabled\":";
+  body += FLAP_SERVO_ENABLED ? "true" : "false";
+  body += ",\"flapOpen\":";
+  body += deviceState.flapOpen ? "true" : "false";
+  body += ",\"activeScheduleCount\":";
+  body += deviceState.activeScheduleCount;
+  body += ",\"lastScheduleSyncOk\":";
+  body += deviceState.lastScheduleSyncOk ? "true" : "false";
   body += ",\"chute\":";
   body += chuteSensorTriggered() ? "true" : "false";
   body += ",\"hand\":";
@@ -116,21 +128,6 @@ void handleWheelCalibration() {
   );
 }
 
-void handleWheelAlignment() {
-  if (!server.hasArg("angle")) {
-    server.send(400, "application/json", "{\"error\":\"angle query parameter required\"}");
-    return;
-  }
-
-  const int angle = server.arg("angle").toInt();
-  const bool moved = moveWheelForAlignment(angle);
-  server.send(
-    moved ? 200 : 409,
-    "application/json",
-    moved ? "{\"status\":\"wheel_aligned\"}" : "{\"status\":\"servo_output_disabled\"}"
-  );
-}
-
 void handleDoorCalibration() {
   if (!server.hasArg("angle")) {
     server.send(400, "application/json", "{\"error\":\"angle query parameter required\"}");
@@ -143,6 +140,21 @@ void handleDoorCalibration() {
     moved ? 200 : 409,
     "application/json",
     moved ? "{\"status\":\"door_moved\"}" : "{\"status\":\"servo_output_disabled\"}"
+  );
+}
+
+void handleFlapCalibration() {
+  if (!server.hasArg("angle")) {
+    server.send(400, "application/json", "{\"error\":\"angle query parameter required\"}");
+    return;
+  }
+
+  const int angle = server.arg("angle").toInt();
+  const bool moved = moveFlapForCalibration(angle);
+  server.send(
+    moved ? 200 : 409,
+    "application/json",
+    moved ? "{\"status\":\"flap_moved\"}" : "{\"status\":\"flap_disabled_or_not_enabled\"}"
   );
 }
 
@@ -173,12 +185,20 @@ void handleServoTest() {
     moveDoorToAngle(DOOR_CLOSED_ANGLE);
   }
 
+  if (FLAP_SERVO_ENABLED && deviceState.flapAttached) {
+    moveFlapToAngle(FLAP_CLOSED_ANGLE);
+    moveFlapToAngle(FLAP_OPEN_ANGLE);
+    moveFlapToAngle(FLAP_CLOSED_ANGLE);
+  }
+
   String body = "{";
   body += "\"status\":\"servo_test_done\"";
   body += ",\"wheelAttached\":";
   body += deviceState.wheelAttached ? "true" : "false";
   body += ",\"doorAttached\":";
   body += deviceState.doorAttached ? "true" : "false";
+  body += ",\"flapAttached\":";
+  body += deviceState.flapAttached ? "true" : "false";
   body += "}";
 
   server.send(200, "application/json", body);
@@ -256,6 +276,14 @@ void setup() {
   initializeRtc();
   initializeFingerprint();
   connectWiFi();
+
+  if (SERVO_OUTPUT_ENABLED) {
+    attachServosIfEnabled();
+    closeFlap();
+    moveWheelToAngle(WHEEL_HOME_ANGLE);
+    closeDoor();
+  }
+
   deviceState.lastStatus = SERVO_OUTPUT_ENABLED ? "Ready for calibration" : "Bench-safe mode";
   refreshIdleDisplay();
 
@@ -263,8 +291,8 @@ void setup() {
   server.on("/dispense", HTTP_POST, handleDispense);
   server.on("/log", HTTP_POST, handleManualLog);
   server.on("/calibrate/wheel", HTTP_POST, handleWheelCalibration);
-  server.on("/calibrate/wheel/align", HTTP_POST, handleWheelAlignment);
   server.on("/calibrate/door", HTTP_POST, handleDoorCalibration);
+  server.on("/calibrate/flap", HTTP_POST, handleFlapCalibration);
   server.on("/servo/test", HTTP_POST, handleServoTest);
   server.on("/servo/test/wheel-sweep", HTTP_POST, handleWheelSweepTest);
   server.on("/i2c/scan", HTTP_GET, handleI2cScan);
@@ -275,6 +303,18 @@ void loop() {
   server.handleClient();
   updateLongPressDispense();
 
+  deviceState.wifiConnected = WiFi.status() == WL_CONNECTED;
+
+  if (!deviceState.wifiConnected && millis() - deviceState.lastWifiReconnectAt >= WIFI_RECONNECT_INTERVAL_MS) {
+    connectWiFi();
+    deviceState.lastWifiReconnectAt = millis();
+  }
+
+  if (!deviceState.rtcReady && millis() - deviceState.lastRtcRetryAt >= SCHEDULE_SYNC_RETRY_INTERVAL_MS) {
+    initializeRtc();
+    deviceState.lastRtcRetryAt = millis();
+  }
+
   if (!deviceState.isDispensing && millis() - deviceState.lastDisplayRefreshAt >= DISPLAY_REFRESH_MS) {
     refreshIdleDisplay();
     deviceState.lastDisplayRefreshAt = millis();
@@ -284,4 +324,17 @@ void loop() {
     sendDeviceEvent("heartbeat", deviceState.currentSlot, "Device online heartbeat.");
     deviceState.lastHeartbeatAt = millis();
   }
+  
+  if (deviceState.rtcReady && deviceState.wifiConnected) {
+    const unsigned long syncInterval =
+      deviceState.activeScheduleCount == 0 ? SCHEDULE_SYNC_RETRY_INTERVAL_MS : SCHEDULE_SYNC_INTERVAL_MS;
+
+    if (deviceState.lastScheduleSyncAt == 0 || millis() - deviceState.lastScheduleSyncAt >= syncInterval) {
+      if (!fetchDailySchedule() && deviceState.activeScheduleCount == 0) {
+        deviceState.lastStatus = "Schedule sync fail";
+      }
+    }
+  }
+  
+  checkAndRunSchedules();
 }

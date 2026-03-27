@@ -32,6 +32,16 @@ inline void attachServosIfEnabled() {
       deviceState.lastStatus = "Door attach fail";
     }
   }
+
+  if (FLAP_SERVO_ENABLED && !deviceState.flapAttached) {
+    flapServo.setPeriodHertz(50);
+    const int flapChannel = flapServo.attach(FLAP_SERVO_PIN, 500, 2400);
+    deviceState.flapAttached = flapChannel >= 0;
+
+    if (!deviceState.flapAttached) {
+      deviceState.lastStatus = "Flap attach fail";
+    }
+  }
 }
 
 inline void moveWheelToAngle(int angle) {
@@ -56,6 +66,21 @@ inline void moveDoorToAngle(int angle) {
   delay(DOOR_TRAVEL_MS);
 }
 
+inline void moveFlapToAngle(int angle) {
+  if (!FLAP_SERVO_ENABLED) {
+    return;
+  }
+
+  attachServosIfEnabled();
+
+  if (!deviceState.flapAttached) {
+    return;
+  }
+
+  flapServo.write(constrain(angle, FLAP_SERVO_MIN_ANGLE, FLAP_SERVO_MAX_ANGLE));
+  delay(FLAP_TRAVEL_MS);
+}
+
 inline void rotateToSlot(int slot) {
   if (slot < 1 || slot > SLOT_COUNT) {
     return;
@@ -73,6 +98,24 @@ inline void closeDoor() {
 inline void openDoor() {
   moveDoorToAngle(DOOR_OPEN_ANGLE);
   deviceState.doorOpen = true;
+}
+
+inline void closeFlap() {
+  if (!FLAP_SERVO_ENABLED) {
+    return;
+  }
+
+  moveFlapToAngle(FLAP_CLOSED_ANGLE);
+  deviceState.flapOpen = false;
+}
+
+inline void openFlap() {
+  if (!FLAP_SERVO_ENABLED) {
+    return;
+  }
+
+  moveFlapToAngle(FLAP_OPEN_ANGLE);
+  deviceState.flapOpen = true;
 }
 
 inline bool waitForChuteTrigger(unsigned long timeoutMs) {
@@ -118,21 +161,6 @@ inline bool moveWheelForCalibration(int angle) {
   return true;
 }
 
-inline bool moveWheelForAlignment(int angle) {
-  if (!SERVO_OUTPUT_ENABLED) {
-    return false;
-  }
-
-  const int target = constrain(angle, WHEEL_SERVO_MIN_ANGLE, WHEEL_SERVO_MAX_ANGLE);
-  const int preAlign = constrain(target - 12, WHEEL_SERVO_MIN_ANGLE, WHEEL_SERVO_MAX_ANGLE);
-
-  // Reduce gear backlash effects by always approaching final target from one side.
-  moveWheelToAngle(preAlign);
-  moveWheelToAngle(target);
-  renderDisplay("Wheel align", "Target " + String(target), "", "");
-  return true;
-}
-
 inline bool moveDoorForCalibration(int angle) {
   if (!SERVO_OUTPUT_ENABLED) {
     return false;
@@ -143,8 +171,20 @@ inline bool moveDoorForCalibration(int angle) {
   return true;
 }
 
+inline bool moveFlapForCalibration(int angle) {
+  if (!SERVO_OUTPUT_ENABLED || !FLAP_SERVO_ENABLED) {
+    return false;
+  }
+
+  moveFlapToAngle(angle);
+  renderDisplay("Flap calibrate", "Angle " + String(angle), "", "");
+  return true;
+}
+
 inline void finishDispenseCycle() {
   closeDoor();
+  closeFlap();
+  moveWheelToAngle(WHEEL_HOME_ANGLE);
   deviceState.isDispensing = false;
   deviceState.activeScheduleIds = "[]";
 }
@@ -165,6 +205,16 @@ inline bool dispenseFlow(int slot) {
   pulseBuzzer(2, 120);
   renderDisplay("Dose Requested", "Preparing slot " + String(slot), "", "");
 
+  attachServosIfEnabled();
+  if (!deviceState.wheelAttached || !deviceState.doorAttached || (FLAP_SERVO_ENABLED && !deviceState.flapAttached)) {
+    setErrorLights();
+    pulseBuzzer(3, 160);
+    deviceState.lastStatus = FLAP_SERVO_ENABLED ? "Servo/flap attach fail" : "Servo attach fail";
+    deviceState.isDispensing = false;
+    renderDisplay("Dispensing Fail", "Servo attach fail", "Check power/pins", "");
+    return false;
+  }
+
   if (!authorizeFingerprint()) {
     setErrorLights();
     pulseBuzzer(4, 180);
@@ -176,8 +226,10 @@ inline bool dispenseFlow(int slot) {
     return false;
   }
 
+  closeFlap();
   renderDisplay("Dispensing", "Rotating wheel", "Slot " + String(slot), "");
   rotateToSlot(slot);
+  openFlap();
   closeDoor();
 
   renderDisplay("Dispensing", "Opening gate", "Watch chute IR", "");

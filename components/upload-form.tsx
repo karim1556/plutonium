@@ -6,6 +6,8 @@ import { FileImage, Loader2, Sparkles } from "lucide-react";
 import type { ParsedPrescriptionMedication } from "@/types/medication";
 import { StatusPill } from "@/components/status-pill";
 
+const TOTAL_SLOTS = 5;
+
 interface ParseResponse {
   medications: ParsedPrescriptionMedication[];
   notes: string[];
@@ -20,10 +22,35 @@ export function UploadForm({ patientId, patientName }: UploadFormProps) {
   const router = useRouter();
   const [ocrText, setOcrText] = useState("");
   const [imageName, setImageName] = useState("");
+  const [imageData, setImageData] = useState("");
   const [result, setResult] = useState<ParseResponse | null>(null);
+  const [slotAssignments, setSlotAssignments] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const onImageSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      setImageData("");
+      return;
+    }
+
+    setImageName(file.name);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = typeof reader.result === "string" ? reader.result : "";
+      const base64Data = value.includes(",") ? value.split(",")[1] ?? "" : value;
+      setImageData(base64Data);
+    };
+    reader.onerror = () => {
+      setError("Unable to read selected image file.");
+      setImageData("");
+    };
+    reader.readAsDataURL(file);
+  };
 
   const submit = () => {
     setError(null);
@@ -38,6 +65,7 @@ export function UploadForm({ patientId, patientName }: UploadFormProps) {
           },
           body: JSON.stringify({
             imageName,
+            imageData,
             ocrText
           })
         });
@@ -49,9 +77,20 @@ export function UploadForm({ patientId, patientName }: UploadFormProps) {
           return;
         }
 
+        // Default every medication to slot 1
+        const defaults: Record<string, number> = {};
+        for (const med of payload.medications) {
+          defaults[med.name] = 1;
+        }
+
+        setSlotAssignments(defaults);
         setResult(payload);
       })();
     });
+  };
+
+  const assignSlot = (medName: string, slot: number) => {
+    setSlotAssignments((current) => ({ ...current, [medName]: slot }));
   };
 
   const save = () => {
@@ -64,6 +103,12 @@ export function UploadForm({ patientId, patientName }: UploadFormProps) {
 
     startTransition(() => {
       void (async () => {
+        // Merge slot assignments into each medication
+        const medicationsWithSlots = result.medications.map((med) => ({
+          ...med,
+          slotId: slotAssignments[med.name] ?? 1
+        }));
+
         const response = await fetch("/api/medications/import", {
           method: "POST",
           headers: {
@@ -71,7 +116,7 @@ export function UploadForm({ patientId, patientName }: UploadFormProps) {
           },
           body: JSON.stringify({
             patientId,
-            medications: result.medications
+            medications: medicationsWithSlots
           })
         });
 
@@ -92,7 +137,7 @@ export function UploadForm({ patientId, patientName }: UploadFormProps) {
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
       <div className="rounded-[34px] border border-white/80 bg-white/90 p-6 shadow-[0_24px_70px_rgba(15,23,42,0.07)]">
         <div className="mb-5 flex items-center gap-3">
           <div className="rounded-2xl bg-sky-50 p-3 text-sky-700">
@@ -107,7 +152,17 @@ export function UploadForm({ patientId, patientName }: UploadFormProps) {
         </div>
 
         <label className="mb-4 block text-sm font-medium text-slate-700">
-          Uploaded image label
+          Upload prescription image
+          <input
+            type="file"
+            accept="image/*"
+            onChange={onImageSelected}
+            className="mt-2 block w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition file:mr-3 file:rounded-full file:border-0 file:bg-slate-900 file:px-4 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-slate-800 focus:border-ocean"
+          />
+        </label>
+
+        <label className="mb-4 block text-sm font-medium text-slate-700">
+          Image label
           <input
             type="text"
             value={imageName}
@@ -157,22 +212,48 @@ export function UploadForm({ patientId, patientName }: UploadFormProps) {
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/60">Parsed Preview</p>
         {result ? (
           <div className="mt-5 space-y-4">
-            {result.medications.map((medication) => (
-              <article key={medication.name} className="rounded-[28px] bg-white/10 p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-lg font-semibold">{medication.name}</h3>
-                    <p className="text-sm text-white/75">
-                      {medication.dosage} • {medication.frequency}x/day • {medication.durationDays} days
-                    </p>
+            {result.medications.map((medication) => {
+              const assigned = slotAssignments[medication.name] ?? 1;
+              return (
+                <article key={medication.name} className="rounded-[28px] bg-white/10 p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-semibold">{medication.name}</h3>
+                      <p className="text-sm text-white/75">
+                        {medication.dosage} • {medication.frequency}x/day • {medication.durationDays} days
+                      </p>
+                    </div>
+                    <StatusPill value={medication.confidence > 0.8 ? "info" : "warning"} />
                   </div>
-                  <StatusPill value={medication.confidence > 0.8 ? "info" : "warning"} />
-                </div>
-                <p className="mt-3 text-sm text-white/80">
-                  {medication.timing.partsOfDay.join(", ")} • {medication.timing.mealRelation.replaceAll("_", " ")}
-                </p>
-              </article>
-            ))}
+                  <p className="mt-2 text-sm text-white/80">
+                    {medication.timing.partsOfDay.join(", ")} • {medication.timing.mealRelation.replaceAll("_", " ")}
+                  </p>
+
+                  {/* Slot Picker */}
+                  <div className="mt-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/50">
+                      Assign to slot
+                    </p>
+                    <div className="flex gap-2">
+                      {Array.from({ length: TOTAL_SLOTS }, (_, i) => i + 1).map((slot) => (
+                        <button
+                          key={slot}
+                          type="button"
+                          onClick={() => assignSlot(medication.name, slot)}
+                          className={`h-9 w-9 rounded-full text-sm font-bold transition ${
+                            assigned === slot
+                              ? "bg-white text-slate-900 shadow-md"
+                              : "bg-white/15 text-white/70 hover:bg-white/25"
+                          }`}
+                        >
+                          {slot}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
             <div className="rounded-[28px] bg-white/10 p-4">
               <p className="text-sm font-semibold">Parser notes</p>
               <ul className="mt-3 space-y-2 text-sm text-white/75">
@@ -183,16 +264,18 @@ export function UploadForm({ patientId, patientName }: UploadFormProps) {
             </div>
             <div className="rounded-[28px] bg-white/10 p-4 text-sm leading-6 text-white/80">
               {patientId
-                ? `Saving will write these medicines into ${patientName ?? "the selected patient"}'s live plan and generate today's schedule if slots are ready.`
+                ? `Saving will write these medicines into ${patientName ?? "the selected patient"}'s live plan using your chosen slot assignments.`
                 : "Select a patient first so the parsed medicines can be saved into a live care plan."}
             </div>
           </div>
         ) : (
           <p className="mt-5 text-sm leading-6 text-white/70">
-            Parsed medications will appear here with confidence, timing interpretation, and duration.
+            Parsed medications will appear here. You can assign each one to a hardware slot (1–5) before saving.
           </p>
         )}
       </div>
     </div>
   );
 }
+
+

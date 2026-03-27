@@ -74,17 +74,17 @@ interface ScheduleRow {
   scheduled_for: string;
   time: string;
   status: ScheduleItem["status"];
-  medications: Array<{
+  medications: {
     id: string;
     name: string;
     dosage: string;
     frequency: number;
     timing: unknown;
     instructions: unknown;
-  }> | null;
-  slots: Array<{
+  } | null;
+  slots: {
     slot_number: number;
-  }> | null;
+  } | null;
 }
 
 interface LogRow {
@@ -103,9 +103,9 @@ interface HardwareLogRow {
   event: HardwareEvent;
   timestamp: string;
   details: string | null;
-  slots: Array<{
+  slots: {
     slot_number: number;
-  }> | null;
+  } | null;
 }
 
 interface BaseCareContext {
@@ -220,7 +220,7 @@ function mapHardwareLogRow(row: HardwareLogRow): HardwareLog {
     id: row.id,
     deviceId: row.device_id,
     slotRecordId: row.slot_id,
-    slotId: row.slots?.[0]?.slot_number ?? 0,
+    slotId: row.slots?.slot_number ?? 0,
     event: row.event,
     timestamp: row.timestamp,
     details: row.details ?? undefined
@@ -353,7 +353,7 @@ function groupScheduleRows(rows: ScheduleRow[], logs: DoseLog[]) {
   const grouped = new Map<string, ScheduleRow[]>();
 
   rows.forEach((row) => {
-    const key = row.bundle_key ?? `${row.scheduled_for}-${row.time.slice(0, 5)}-slot-${row.slots?.[0]?.slot_number ?? 0}`;
+    const key = row.bundle_key ?? `${row.scheduled_for}-${row.time.slice(0, 5)}-slot-${row.slots?.slot_number ?? 0}`;
     const current = grouped.get(key) ?? [];
     current.push(row);
     grouped.set(key, current);
@@ -365,17 +365,17 @@ function groupScheduleRows(rows: ScheduleRow[], logs: DoseLog[]) {
         asStringArray(entryRows[0]?.bundle_medicines).length
           ? asStringArray(entryRows[0]?.bundle_medicines)
           : entryRows
-              .map((row) => row.medications?.[0]?.name)
+              .map((row) => row.medications?.name)
               .filter((name): name is string => Boolean(name))
       );
       const bundleStatus = resolveBundleStatus(entryRows, logs);
-      const maxFrequency = Math.max(...entryRows.map((row) => row.medications?.[0]?.frequency ?? 1));
+      const maxFrequency = Math.max(...entryRows.map((row) => row.medications?.frequency ?? 1));
 
       return {
         id: bundleKey,
         medicationIds: entryRows.map((row) => row.medication_id),
         sourceScheduleIds: entryRows.map((row) => row.id),
-        slotId: entryRows[0]?.slots?.[0]?.slot_number ?? 0,
+        slotId: entryRows[0]?.slots?.slot_number ?? 0,
         time: entryRows[0]?.time.slice(0, 5) ?? "09:00",
         medicines,
         status: bundleStatus.status,
@@ -1062,11 +1062,64 @@ export async function createOrUpdateMedicationPlan(input: {
     inserted += 1;
   }
 
-  const refreshedContext = await loadBaseCareContext(input.session, patient.id);
+  let refreshedContext = await loadBaseCareContext(input.session, patient.id);
+
+  if (!refreshedContext.device) {
+    await registerOrUpdateDevice({
+      session: input.session,
+      patientId: patient.id,
+      ipAddress: "0.0.0.0",
+      requiresFingerprint: false
+    });
+    refreshedContext = await loadBaseCareContext(input.session, patient.id);
+  } else if (refreshedContext.slots.length === 0) {
+    // Device exists but no slots found. Auto-create default slots.
+    const defaultSlots = [
+      { slot_number: 1, type: "single", medicines: [], capacity: 1, remaining: 0, rotation_angle: 72 },
+      { slot_number: 2, type: "single", medicines: [], capacity: 1, remaining: 0, rotation_angle: 144 },
+      { slot_number: 3, type: "single", medicines: [], capacity: 1, remaining: 0, rotation_angle: 216 },
+      { slot_number: 4, type: "dual", medicines: [], capacity: 2, remaining: 0, rotation_angle: 288 },
+      { slot_number: 5, type: "dual", medicines: [], capacity: 2, remaining: 0, rotation_angle: 360 }
+    ];
+
+    await service.from("slots").insert(
+      defaultSlots.map((slot) => ({
+        device_id: refreshedContext.device!.id,
+        ...slot
+      }))
+    );
+    refreshedContext = await loadBaseCareContext(input.session, patient.id);
+  }
 
   if (refreshedContext.medications.length && refreshedContext.slots.length) {
+    // Build a map of medicine names to user-assigned slot IDs (1-5)
+    const slotAssignments: Record<string, number> = {};
+    for (const med of input.medications) {
+      if (med.slotId !== undefined) {
+        slotAssignments[med.name] = med.slotId;
+      }
+    }
+
+    // Persist the assigned medicines into the actual slot records in the DB
+    for (const slot of refreshedContext.slots) {
+      const assignedMedsForThisSlot = Object.keys(slotAssignments).filter(
+        (name) => slotAssignments[name] === slot.id
+      );
+
+      if (assignedMedsForThisSlot.length > 0) {
+        const existingMeds = Array.isArray(slot.medicines) ? slot.medicines as string[] : [];
+        const newMeds = uniqueValues([...existingMeds, ...assignedMedsForThisSlot]);
+
+        await service
+          .from("slots")
+          .update({ medicines: newMeds })
+          .eq("id", slot.recordId as string);
+      }
+    }
+
     const generatedSchedules = generateScheduleFromMedications(refreshedContext.medications, refreshedContext.slots, {
-      scheduledDate: getTodayIsoDate()
+      scheduledDate: getTodayIsoDate(),
+      slotAssignments
     });
 
     await saveScheduleBundlesForPatient({
@@ -1193,6 +1246,7 @@ export async function recordHardwareEvent(input: {
   details?: string;
   timestamp?: string;
   scheduleIds?: string[];
+  ipAddress?: string;
 }) {
   const service = createServiceRoleSupabaseClient();
 
@@ -1220,6 +1274,7 @@ export async function recordHardwareEvent(input: {
     last_seen: string;
     last_activity: string;
     current_slot?: number;
+    ip_address?: string;
   } = {
     status: getDeviceStatusForHardwareEvent(input.event),
     last_seen: eventTimestamp,
@@ -1228,6 +1283,10 @@ export async function recordHardwareEvent(input: {
 
   if (typeof input.slotNumber === "number") {
     deviceUpdatePayload.current_slot = input.slotNumber;
+  }
+
+  if (input.ipAddress) {
+    deviceUpdatePayload.ip_address = input.ipAddress;
   }
 
   await service.from("devices").update(deviceUpdatePayload).eq("id", input.deviceId);

@@ -23,13 +23,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "deviceId and event are required." }, { status: 400 });
   }
 
+  const ipAddress =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "Unknown";
+
   const result = await recordHardwareEvent({
     deviceId: payload.deviceId,
     event: payload.event,
     slotNumber: payload.slotNumber,
     details: payload.details,
     timestamp: payload.timestamp,
-    scheduleIds: payload.scheduleIds
+    scheduleIds: payload.scheduleIds,
+    ipAddress: ipAddress !== "Unknown" ? ipAddress : undefined
   });
 
   if (!result.ok) {

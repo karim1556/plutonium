@@ -7,7 +7,7 @@ This guide matches the current firmware in `firmware/esp32-medassist/` to the ac
 - 16x4 I2C LCD
 - R307S fingerprint sensor
 - 2 IR sensors
-- 2 servos
+- 3 servos (wheel + door + flap)
 - buzzer
 - 2 LEDs
 - 1 switch
@@ -41,6 +41,7 @@ Install these Arduino libraries before compiling:
 | Fingerprint RX | GPIO 17 | ESP32 TX to module RX |
 | Wheel servo signal | GPIO 18 | Rotation servo |
 | Door servo signal | GPIO 19 | Gate open/close servo |
+| Flap servo signal | GPIO 33 | Wheel flap open/close |
 | IR chute sensor output | GPIO 34 | Input-only pin |
 | IR hand sensor output | GPIO 35 | Input-only pin |
 | Buzzer signal | GPIO 27 | Active or passive buzzer |
@@ -109,6 +110,7 @@ If the module TX line is above 3.3V, do not connect it directly to `GPIO 16`.
 
 - ESP32 `GPIO 18` -> wheel servo signal
 - ESP32 `GPIO 19` -> door servo signal
+- ESP32 `GPIO 33` -> flap servo signal
 - servo power -> dedicated servo supply
 - servo ground -> common ground
 
@@ -151,11 +153,12 @@ When servo motion is enabled later:
 
 1. request dispense for a slot
 2. fingerprint check
-3. rotate wheel servo to the selected slot
+3. close flap, rotate wheel to slot, open flap
 4. open the door servo
 5. wait for the chute IR sensor to detect pill movement
 6. close the door servo
-7. wait for the hand IR sensor to confirm pickup
+7. close flap and return wheel to home
+8. wait for the hand IR sensor to confirm pickup
 
 ### Local switch behavior
 
@@ -168,6 +171,11 @@ After you move to a proper servo power setup and set `SERVO_OUTPUT_ENABLED=true`
 
 - `POST /calibrate/wheel?angle=90`
 - `POST /calibrate/door?angle=90`
+- `POST /calibrate/flap?angle=90`
+
+To enable the new flap servo logic in firmware, set this in [Config.h](/Users/karimshaikh/Desktop/plutonium/firmware/esp32-medassist/Config.h):
+
+- `FLAP_SERVO_ENABLED=true`
 
 The slot table in [Config.h](/Users/karimshaikh/Desktop/plutonium/firmware/esp32-medassist/Config.h) is intentionally set to the wheel home angle for all slots until you measure the real wheel positions.
 

@@ -5,6 +5,7 @@ constexpr int LCD_SCL_PIN = 22;
 
 constexpr int WHEEL_SERVO_PIN = 18;
 constexpr int DOOR_SERVO_PIN = 19;
+constexpr int FLAP_SERVO_PIN = 33;
 
 constexpr int IR_CHUTE_SENSOR_PIN = 34;
 constexpr int IR_HAND_SENSOR_PIN = 35;

@@ -44,21 +44,34 @@ export function VoiceChatPanel({ schedules, logs, medications, role, promptStart
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
-  const [speechSupported, setSpeechSupported] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Check for speech API support
+  // Check for mic API support
   useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    setSpeechSupported(!!SpeechRecognition && !!window.speechSynthesis);
+    setSpeechSupported(!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
   }, []);
 
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  const playBase64Audio = (base64: string) => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+    }
+    const audioData = `data:audio/mp3;base64,${base64}`;
+    const audio = new Audio(audioData);
+    currentAudioRef.current = audio;
+    setIsSpeaking(true);
+    audio.onended = () => setIsSpeaking(false);
+    audio.play().catch(e => console.error("Error playing audio:", e));
+  };
 
   // Text-to-Speech function
   const speak = (text: string) => {
@@ -77,46 +90,100 @@ export function VoiceChatPanel({ schedules, logs, medications, role, promptStart
     window.speechSynthesis.speak(utterance);
   };
 
-  // Speech-to-Text function
-  const startListening = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+  // Speech-to-Text via Backend
+  const startListening = async () => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
 
-    recognitionRef.current = new SpeechRecognition();
-    recognitionRef.current.continuous = false;
-    recognitionRef.current.interimResults = true;
-    recognitionRef.current.lang = "en-US";
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
 
-    recognitionRef.current.onstart = () => setIsListening(true);
+      mediaRecorder.onstop = () => {
+        setIsListening(false);
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        stream.getTracks().forEach(track => track.stop());
 
-    recognitionRef.current.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map((result) => result[0].transcript)
-        .join("");
-      setQuestion(transcript);
-    };
+        if (audioBlob.size === 0) return;
 
-    recognitionRef.current.onend = () => {
-      setIsListening(false);
-    };
+        startTransition(() => {
+          void (async () => {
+            const formData = new FormData();
+            formData.append("audio", audioBlob);
+            formData.append("schedules", JSON.stringify(schedules));
+            formData.append("logs", JSON.stringify(logs));
+            formData.append("medications", JSON.stringify(medications));
+            
+            const history = messages.slice(1).map(msg => ({
+              role: msg.role,
+              content: msg.content,
+              timestamp: msg.timestamp
+            }));
+            formData.append("conversationHistory", JSON.stringify(history));
+            
+            if (patientName) formData.append("patientName", patientName);
 
-    recognitionRef.current.onerror = () => {
-      setIsListening(false);
-    };
+            try {
+              const res = await fetch("/api/chat/speech", {
+                method: "POST",
+                body: formData
+              });
+              const payload = await res.json();
+              
+              if (payload.question) {
+                setMessages(prev => [...prev, {
+                  role: "user",
+                  content: payload.question,
+                  timestamp: new Date()
+                }]);
+              }
+              
+              if (payload.answer) {
+                setMessages(prev => [...prev, {
+                  role: "assistant",
+                  content: payload.answer,
+                  safety: payload.safety,
+                  timestamp: new Date()
+                }]);
+                
+                if (payload.enhanced !== undefined) setIsEnhanced(payload.enhanced);
 
-    recognitionRef.current.start();
+                if (voiceEnabled && payload.audioBase64) {
+                  playBase64Audio(payload.audioBase64);
+                } else if (voiceEnabled) {
+                  speak(payload.answer);
+                }
+              }
+            } catch (err) {
+              console.error("Speech API error:", err);
+            }
+          })();
+        });
+      };
+
+      mediaRecorder.start();
+      setIsListening(true);
+    } catch (err) {
+      console.error("Microphone access denied:", err);
+    }
   };
 
   const stopListening = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsListening(false);
+    if (mediaRecorderRef.current && isListening) {
+      mediaRecorderRef.current.stop();
     }
   };
 
   const toggleVoice = () => {
     if (isSpeaking) {
       window.speechSynthesis.cancel();
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+      }
       setIsSpeaking(false);
     }
     setVoiceEnabled(!voiceEnabled);
@@ -137,7 +204,7 @@ export function VoiceChatPanel({ schedules, logs, medications, role, promptStart
 
     startTransition(() => {
       void (async () => {
-        // Prepare conversation history for the API (exclude the greeting message and current user message)
+        // Prepare conversation history for the API
         const conversationHistory = messages
           .slice(1) // Skip the initial greeting
           .map(msg => ({
@@ -146,44 +213,46 @@ export function VoiceChatPanel({ schedules, logs, medications, role, promptStart
             timestamp: msg.timestamp
           }));
 
-        const response = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            question: currentQuestion,
-            schedules,
-            logs,
-            medications,
-            conversationHistory,
-            patientName,
-            role
-          })
-        });
+        const formData = new FormData();
+        formData.append("question", currentQuestion);
+        formData.append("schedules", JSON.stringify(schedules));
+        formData.append("logs", JSON.stringify(logs));
+        formData.append("medications", JSON.stringify(medications));
+        formData.append("conversationHistory", JSON.stringify(conversationHistory));
+        if (patientName) formData.append("patientName", patientName);
 
-        const payload = (await response.json()) as {
-          answer: string;
-          safety: string;
-          enhanced?: boolean;
-          timestamp?: string;
-        };
+        try {
+          const response = await fetch("/api/chat/speech", {
+            method: "POST",
+            body: formData
+          });
 
-        // Update enhanced status
-        if (payload.enhanced !== undefined) {
-          setIsEnhanced(payload.enhanced);
-        }
+          const payload = await response.json();
 
-        const assistantMessage: ChatMessage = {
-          role: "assistant",
-          content: payload.answer,
-          safety: payload.safety,
-          timestamp: new Date()
-        };
+          // Update enhanced status
+          if (payload.enhanced !== undefined) {
+            setIsEnhanced(payload.enhanced);
+          }
 
-        setMessages((current) => [...current, assistantMessage]);
+          if (payload.answer) {
+            const assistantMessage: ChatMessage = {
+              role: "assistant",
+              content: payload.answer,
+              safety: payload.safety,
+              timestamp: new Date()
+            };
 
-        // Auto-speak the response if voice is enabled
-        if (voiceEnabled) {
-          speak(payload.answer);
+            setMessages((current) => [...current, assistantMessage]);
+
+            // Auto-speak the response if voice is enabled
+            if (voiceEnabled && payload.audioBase64) {
+              playBase64Audio(payload.audioBase64);
+            } else if (voiceEnabled) {
+              speak(payload.answer);
+            }
+          }
+        } catch (err) {
+          console.error("Chat API error:", err);
         }
       })();
     });
