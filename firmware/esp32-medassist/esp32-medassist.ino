@@ -176,7 +176,7 @@ void handleServoTest() {
   if (deviceState.wheelAttached) {
     moveWheelToAngle(30);
     moveWheelToAngle(150);
-    moveWheelToAngle(WHEEL_HOME_ANGLE);
+    moveWheelToAngle(WHEEL_RESET_ANGLE);
   }
 
   if (deviceState.doorAttached) {
@@ -222,7 +222,7 @@ void handleWheelSweepTest() {
     moveWheelToAngle(20);
     moveWheelToAngle(160);
   }
-  moveWheelToAngle(WHEEL_HOME_ANGLE);
+  moveWheelToAngle(WHEEL_RESET_ANGLE);
 
   server.send(200, "application/json", "{\"status\":\"wheel_sweep_done\"}");
 }
@@ -280,7 +280,7 @@ void setup() {
   if (SERVO_OUTPUT_ENABLED) {
     attachServosIfEnabled();
     closeFlap();
-    moveWheelToAngle(WHEEL_HOME_ANGLE);
+    moveWheelToAngle(WHEEL_RESET_ANGLE);
     closeDoor();
   }
 

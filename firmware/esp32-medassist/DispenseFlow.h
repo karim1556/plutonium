@@ -184,7 +184,7 @@ inline bool moveFlapForCalibration(int angle) {
 inline void finishDispenseCycle() {
   closeDoor();
   closeFlap();
-  moveWheelToAngle(WHEEL_HOME_ANGLE);
+  moveWheelToAngle(WHEEL_RESET_ANGLE);
   deviceState.isDispensing = false;
   deviceState.activeScheduleIds = "[]";
 }
@@ -229,8 +229,15 @@ inline bool dispenseFlow(int slot) {
   closeFlap();
   renderDisplay("Dispensing", "Rotating wheel", "Slot " + String(slot), "");
   rotateToSlot(slot);
+  delay(SLOT_ALIGN_SETTLE_MS);
+
+  renderDisplay("Dispensing", "Flap open", "Release 1 pill", "");
   openFlap();
-  closeDoor();
+  delay(FLAP_RELEASE_OPEN_MS);
+  closeFlap();
+
+  renderDisplay("Dispensing", "Wheel reset", "Returning home", "");
+  moveWheelToAngle(WHEEL_RESET_ANGLE);
 
   renderDisplay("Dispensing", "Opening gate", "Watch chute IR", "");
   openDoor();

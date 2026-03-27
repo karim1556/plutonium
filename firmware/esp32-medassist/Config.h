@@ -49,7 +49,7 @@ constexpr int SENSOR_ACTIVE_STATE = LOW;
 // The guide below uses INPUT_PULLUP and a switch wired to GND.
 constexpr int SWITCH_ACTIVE_STATE = LOW;
 
-constexpr int WHEEL_SERVO_MIN_ANGLE = 10;
+constexpr int WHEEL_SERVO_MIN_ANGLE = 0;
 constexpr int WHEEL_SERVO_MAX_ANGLE = 170;
 constexpr int DOOR_SERVO_MIN_ANGLE = 20;
 constexpr int DOOR_SERVO_MAX_ANGLE = 160;
@@ -57,11 +57,14 @@ constexpr int FLAP_SERVO_MIN_ANGLE = 10;
 constexpr int FLAP_SERVO_MAX_ANGLE = 170;
 
 constexpr int WHEEL_HOME_ANGLE = 90;
+constexpr int WHEEL_RESET_ANGLE = 0;
 constexpr int DOOR_CLOSED_ANGLE = 50;
 constexpr int DOOR_OPEN_ANGLE = 110;
 constexpr int FLAP_CLOSED_ANGLE = 40;
 constexpr int FLAP_OPEN_ANGLE = 120;
 constexpr unsigned long FLAP_TRAVEL_MS = 450;
+constexpr unsigned long SLOT_ALIGN_SETTLE_MS = 700;
+constexpr unsigned long FLAP_RELEASE_OPEN_MS = 1000;
 
 // Intentionally held at home until the real mechanism is calibrated.
 const int SLOT_ANGLES[SLOT_COUNT] = {
