@@ -119,6 +119,30 @@ export function ScheduleEditor({
     });
   };
 
+  const handleReset = () => {
+    if (!confirm("Are you sure you want to completely erase ALL medications, slots, and schedules for this user? This cannot be undone.")) return;
+    
+    setFeedback("Resetting data...");
+    startTransition(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/schedule/reset${patientId ? `?patient=${patientId}` : ''}`, {
+            method: "POST"
+          });
+          
+          if (res.ok) {
+            setFeedback("All data cleared. Reloading...");
+            setTimeout(() => window.location.reload(), 1500);
+          } else {
+            setFeedback("Failed to reset tables.");
+          }
+        } catch (e) {
+          setFeedback("Error resetting data.");
+        }
+      })();
+    });
+  };
+
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
       <div className="rounded-[34px] border border-white/80 bg-white/90 p-6 shadow-[0_24px_70px_rgba(15,23,42,0.07)]">
@@ -179,6 +203,14 @@ export function ScheduleEditor({
             className="inline-flex items-center gap-2 rounded-full bg-sky-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:bg-slate-400"
           >
             Save Schedule
+          </button>
+          <button
+            type="button"
+            onClick={handleReset}
+            disabled={isPending || !patientId}
+            className="inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+          >
+            Reset All Device Tables
           </button>
           {feedback ? <p className="self-center text-sm font-medium text-slate-600">{feedback}</p> : null}
         </div>
