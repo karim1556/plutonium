@@ -16,5 +16,5 @@ constexpr int RED_LED_PIN = 25;
 
 constexpr int MANUAL_SWITCH_PIN = 23;
 
-constexpr int FINGERPRINT_RX_PIN = 14;
-constexpr int FINGERPRINT_TX_PIN = 15;
+constexpr int FINGERPRINT_RX_PIN = 16;
+constexpr int FINGERPRINT_TX_PIN = 17;

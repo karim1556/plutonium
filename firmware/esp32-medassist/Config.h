@@ -4,8 +4,8 @@
 
 const char* WIFI_SSID = "rohan";
 const char* WIFI_PASSWORD = "iambatman";
-const char* BACKEND_EVENT_URL = "http://10.237.160.233:3000/api/device/event";
-const char* BACKEND_SCHEDULE_URL = "http://10.237.160.233:3000/api/device/schedule";
+const char* BACKEND_EVENT_URL = "http://10.121.128.233:3000/api/device/event";
+const char* BACKEND_SCHEDULE_URL = "http://10.121.128.233:3000/api/device/schedule";
 const char* DEVICE_ID = "71deb4a9-fa30-469e-ae92-731cf4516b52";
 const char* DEVICE_SHARED_KEY = "e6fc750b9dd41f2a6b956bc2e7baaa80a2c970ed856bb273";
 
